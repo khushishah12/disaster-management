@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { getMyRequests, type SosRequestRow } from "@/lib/sos/actions";
 import { cn } from "@/lib/utils";
 
@@ -91,7 +92,7 @@ function RequestCard({ req }: { req: SosRequestRow }) {
   const totalPeople = req.adults_count + req.children_count + req.elderly_count + req.injured_count;
 
   return (
-    <div className="rounded-2xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/40 p-5 transition-shadow hover:shadow-md">
+    <Link href={`/sos/my-requests/${req.id}`} className="block rounded-2xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/40 p-5 transition-shadow hover:shadow-md">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <span className="text-xl shrink-0">{typeInfo.emoji}</span>
@@ -142,7 +143,7 @@ function RequestCard({ req }: { req: SosRequestRow }) {
           {req.description}
         </p>
       )}
-    </div>
+    </Link>
   );
 }
 

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Sidebar, type TabId } from "@/components/dashboard/Sidebar";
 import { SosEmergencyCenter } from "@/components/sos/SosEmergencyCenter";
+import { CompleteProfileModal } from "@/components/sos/CompleteProfileModal";
 import { signOut } from "@/lib/auth/actions";
 import type { AppRole } from "@/lib/sos/roles";
 
@@ -46,6 +47,7 @@ export const SidebarLayout = ({
 }: SidebarLayoutProps) => {
   const [activeTab, setActiveTab] = useState<TabId>("operations");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
   const handleTabChange = useCallback((tab: TabId) => {
@@ -149,6 +151,13 @@ export const SidebarLayout = ({
             <span className="hidden rounded-full border border-teal-500/30 bg-teal-500/10 px-3 py-1 text-xs font-medium text-teal-200 sm:inline-flex">
               {appRole === "civilian" ? "Civilian" : appRole === "coordinator" ? "Coordinator" : appRole === "rescue_team" ? "Rescue Team" : appRole === "ambulance_team" ? "Ambulance Team" : appRole === "fire_response" ? "Fire Response" : appRole}
             </span>
+            <button
+              type="button"
+              onClick={() => setProfileOpen(true)}
+              className="rounded-lg border border-slate-700 bg-slate-900/80 px-4 py-2 text-sm font-medium text-teal-300 transition hover:border-teal-600 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-500"
+            >
+              Complete Profile
+            </button>
             <form action={signOut}>
               <button
                 type="submit"
@@ -158,6 +167,7 @@ export const SidebarLayout = ({
               </button>
             </form>
           </div>
+          <CompleteProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
         </header>
 
         <main className="flex-1 overflow-auto px-4 py-6 sm:px-6 lg:px-8">
