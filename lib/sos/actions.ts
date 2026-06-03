@@ -71,3 +71,51 @@ export async function submitSosRequest(
     ticketNumber: result.ticket_number,
   };
 }
+
+export type SosRequestRow = {
+  id: string;
+  ticket_number: string;
+  emergency_type: string;
+  severity: string;
+  status: string;
+  address: string | null;
+  description: string | null;
+  latitude: number;
+  longitude: number;
+  adults_count: number;
+  children_count: number;
+  elderly_count: number;
+  injured_count: number;
+  immediate_needs: string[];
+  created_at: string;
+  updated_at: string;
+};
+
+export async function getMyRequests(): Promise<{
+  data: SosRequestRow[] | null;
+  error: string | null;
+}> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { data: null, error: "You must be logged in." };
+  }
+
+  const { data, error } = await supabase
+    .from("sos_requests")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("getMyRequests error:", error);
+    return { data: null, error: "Failed to fetch your requests." };
+  }
+
+  return { data, error: null };
+}

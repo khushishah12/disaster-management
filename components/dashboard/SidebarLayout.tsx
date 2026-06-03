@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Sidebar, type TabId } from "@/components/dashboard/Sidebar";
-import { RoleNav } from "@/components/sos/RoleNav";
+import { SosEmergencyCenter } from "@/components/sos/SosEmergencyCenter";
 import { signOut } from "@/lib/auth/actions";
 import type { AppRole } from "@/lib/sos/roles";
 
@@ -87,17 +87,7 @@ export const SidebarLayout = ({
     if (activeTab === "operations") return children;
     if (activeTab === "ai-intel") return <AiResponseDashboard />;
     if (activeTab === "sos") {
-      return (
-        <div className="mx-auto max-w-3xl space-y-6">
-          <div className="dashboard-panel rounded-2xl border border-slate-800/60 p-6">
-            <h2 className="mb-4 text-lg font-semibold text-slate-100">SOS Emergency Center</h2>
-            <p className="mb-6 text-sm text-slate-400">
-              Access SOS request forms and view emergency requests based on your role.
-            </p>
-            <RoleNav role={appRole} />
-          </div>
-        </div>
-      );
+      return <SosEmergencyCenter appRole={appRole} />;
     }
     return <PlaceholderContent label={TAB_CONTENT[activeTab].label} />;
   }, [activeTab, children, appRole]);
