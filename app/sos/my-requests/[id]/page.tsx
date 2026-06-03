@@ -2,21 +2,34 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getRequestById, cancelSosRequest, type SosRequestRow } from "@/lib/sos/actions";
+import { getRequestById, cancelSosRequest, updateSosRequest, type SosRequestRow, type EditableSosFields } from "@/lib/sos/actions";
 import { cn } from "@/lib/utils";
 
-const EMERGENCY_MAP: Record<string, { emoji: string; label: string }> = {
-  medical: { emoji: "🆘", label: "Medical" },
-  fire: { emoji: "🔥", label: "Fire" },
-  flood: { emoji: "🌊", label: "Flood" },
-  earthquake: { emoji: "🏚️", label: "Earthquake" },
-  cyclone: { emoji: "🌀", label: "Cyclone" },
-  landslide: { emoji: "⛰️", label: "Landslide" },
-  structural_collapse: { emoji: "🏗️", label: "Collapse" },
-  road_accident: { emoji: "🚗", label: "Accident" },
-  missing_person: { emoji: "🔍", label: "Missing" },
-  other: { emoji: "❗", label: "Other" },
-};
+const EMERGENCY_TYPES = [
+  { value: "medical", emoji: "🆘", label: "Medical" },
+  { value: "fire", emoji: "🔥", label: "Fire" },
+  { value: "flood", emoji: "🌊", label: "Flood" },
+  { value: "earthquake", emoji: "🏚️", label: "Earthquake" },
+  { value: "cyclone", emoji: "🌀", label: "Cyclone" },
+  { value: "landslide", emoji: "⛰️", label: "Landslide" },
+  { value: "structural_collapse", emoji: "🏗️", label: "Collapse" },
+  { value: "road_accident", emoji: "🚗", label: "Accident" },
+  { value: "missing_person", emoji: "🔍", label: "Missing" },
+  { value: "other", emoji: "❗", label: "Other" },
+];
+
+const EMERGENCY_MAP: Record<string, { emoji: string; label: string }> =
+  Object.fromEntries(EMERGENCY_TYPES.map((t) => [t.value, { emoji: t.emoji, label: t.label }]));
+
+const SEVERITIES = [
+  { value: "low", label: "Low", dot: "bg-green-500" },
+  { value: "moderate", label: "Moderate", dot: "bg-amber-500" },
+  { value: "high", label: "High", dot: "bg-orange-500" },
+  { value: "critical", label: "Critical", dot: "bg-red-500" },
+];
+
+const SEVERITY_STYLES: Record<string, { label: string; dot: string }> =
+  Object.fromEntries(SEVERITIES.map((s) => [s.value, { label: s.label, dot: s.dot }]));
 
 const STATUS_STYLES: Record<string, { label: string; classes: string }> = {
   pending: { label: "Pending", classes: "bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-600" },
@@ -25,13 +38,6 @@ const STATUS_STYLES: Record<string, { label: string; classes: string }> = {
   rescued: { label: "Rescued", classes: "bg-green-100 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700" },
   closed: { label: "Closed", classes: "bg-slate-100 text-slate-500 border-slate-300 dark:bg-slate-800 dark:text-slate-500 dark:border-slate-600" },
   cancelled: { label: "Cancelled", classes: "bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700" },
-};
-
-const SEVERITY_STYLES: Record<string, { label: string; dot: string }> = {
-  critical: { label: "Critical", dot: "bg-red-500" },
-  high: { label: "High", dot: "bg-orange-500" },
-  moderate: { label: "Moderate", dot: "bg-amber-500" },
-  low: { label: "Low", dot: "bg-green-500" },
 };
 
 function timeAgo(dateStr: string): string {
@@ -68,6 +74,11 @@ export default function RequestDetailPage() {
   const [cancelling, setCancelling] = useState(false);
   const [cancelResult, setCancelResult] = useState<string | null>(null);
 
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState<EditableSosFields | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [editResult, setEditResult] = useState<string | null>(null);
+
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
@@ -96,6 +107,55 @@ export default function RequestDetailPage() {
     setCancelling(false);
   }, [req]);
 
+  function openEdit() {
+    if (!req) return;
+    setEditForm({
+      emergency_type: req.emergency_type,
+      severity: req.severity,
+      adults_count: req.adults_count,
+      children_count: req.children_count,
+      elderly_count: req.elderly_count,
+      injured_count: req.injured_count,
+      address: req.address ?? "",
+      description: req.description ?? "",
+      immediate_needs: req.immediate_needs ?? [],
+      phone_number: req.phone_number ?? "",
+      alternate_contact: req.alternate_contact ?? "",
+    });
+    setEditResult(null);
+    setEditOpen(true);
+  }
+
+  async function handleSaveEdit() {
+    if (!editForm || !req) return;
+    setSaving(true);
+    setEditResult(null);
+    const res = await updateSosRequest(req.id, editForm);
+    if (res.success) {
+      // refetch
+      const { data } = await getRequestById(req.id);
+      if (data) setReq(data);
+      setEditResult(res.success);
+      setTimeout(() => { setEditOpen(false); }, 1200);
+    } else {
+      setEditResult(res.error ?? "Failed to update.");
+    }
+    setSaving(false);
+  }
+
+  function updateField<K extends keyof EditableSosFields>(key: K, value: EditableSosFields[K]) {
+    if (!editForm) return;
+    setEditForm({ ...editForm, [key]: value });
+  }
+
+  function toggleNeed(need: string) {
+    if (!editForm) return;
+    const next = editForm.immediate_needs.includes(need)
+      ? editForm.immediate_needs.filter((n) => n !== need)
+      : [...editForm.immediate_needs, need];
+    setEditForm({ ...editForm, immediate_needs: next });
+  }
+
   if (loading) {
     return (
       <div className="min-h-dvh bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
@@ -110,9 +170,7 @@ export default function RequestDetailPage() {
         <div className="text-4xl mb-4">📋</div>
         <h2 className="text-lg font-bold text-slate-600 dark:text-slate-400 mb-1">Request Not Found</h2>
         <p className="text-sm text-slate-400 dark:text-slate-500 mb-6">{error || "This request could not be found."}</p>
-        <a href="/sos/my-requests" className="py-3 px-6 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition-colors">
-          Back to My Requests
-        </a>
+        <a href="/sos/my-requests" className="py-3 px-6 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition-colors">Back to My Requests</a>
       </div>
     );
   }
@@ -155,18 +213,14 @@ export default function RequestDetailPage() {
 
             <div className="space-y-0">
               <DetailRow label="Status">
-                <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold border", statusStyle.classes)}>
-                  {statusStyle.label}
-                </span>
+                <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold border", statusStyle.classes)}>{statusStyle.label}</span>
               </DetailRow>
               <DetailRow label="People">{totalPeople > 0 ? `${totalPeople} total` : "None reported"}</DetailRow>
               {req.adults_count > 0 && <DetailRow label="  Adults">{req.adults_count}</DetailRow>}
               {req.children_count > 0 && <DetailRow label="  Children">{req.children_count}</DetailRow>}
               {req.elderly_count > 0 && <DetailRow label="  Elderly">{req.elderly_count}</DetailRow>}
               {req.injured_count > 0 && <DetailRow label="  Injured">{req.injured_count}</DetailRow>}
-              <DetailRow label="Location">
-                {req.latitude.toFixed(4)}, {req.longitude.toFixed(4)}
-              </DetailRow>
+              <DetailRow label="Location">{req.latitude.toFixed(4)}, {req.longitude.toFixed(4)}</DetailRow>
               {req.address && <DetailRow label="Address">{req.address}</DetailRow>}
               <DetailRow label="Updated">{timeAgo(req.updated_at)}</DetailRow>
             </div>
@@ -185,20 +239,17 @@ export default function RequestDetailPage() {
             <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-red-500 dark:text-red-400 mb-3">Immediate Needs</h3>
             <div className="flex flex-wrap gap-2">
               {req.immediate_needs.map((need) => (
-                <span key={need} className="px-3 py-1 rounded-full bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-xs font-semibold border border-red-200 dark:border-red-800">
-                  {need}
-                </span>
+                <span key={need} className="px-3 py-1 rounded-full bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-xs font-semibold border border-red-200 dark:border-red-800">{need}</span>
               ))}
             </div>
           </div>
         )}
 
-        {/* Cancel button */}
         {req.status === "pending" && (
-          <div className="mt-6">
+          <div className="mt-6 space-y-3">
             {cancelResult && (
               <div className={cn(
-                "mb-3 p-3 rounded-xl text-sm font-semibold flex items-center gap-2",
+                "p-3 rounded-xl text-sm font-semibold flex items-center gap-2",
                 cancelResult.includes("successfully") || cancelResult.includes("Successfully")
                   ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300"
                   : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300"
@@ -206,28 +257,121 @@ export default function RequestDetailPage() {
                 {cancelResult.includes("successfully") || cancelResult.includes("Successfully") ? "✅" : "⚠️"} {cancelResult}
               </div>
             )}
-            <button
-              type="button"
-              onClick={handleCancel}
-              disabled={cancelling}
-              className="w-full py-3.5 rounded-xl border-2 border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 text-sm font-extrabold transition-all hover:bg-red-50 dark:hover:bg-red-900/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
-            >
-              {cancelling ? "Cancelling..." : "Cancel This Request"}
-            </button>
-            <p className="mt-2 text-xs text-slate-400 dark:text-slate-500 text-center">
-              Only pending requests can be cancelled. Once cancelled, responders will be notified.
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={openEdit}
+                className="py-3.5 rounded-xl border-2 border-amber-300 dark:border-amber-700 text-amber-600 dark:text-amber-400 text-sm font-extrabold transition-all hover:bg-amber-50 dark:hover:bg-amber-900/20 active:scale-[0.98]"
+              >
+                ✏️ Edit Request
+              </button>
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={cancelling}
+                className="py-3.5 rounded-xl border-2 border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 text-sm font-extrabold transition-all hover:bg-red-50 dark:hover:bg-red-900/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+              >
+                {cancelling ? "Cancelling..." : "🗑️ Cancel"}
+              </button>
+            </div>
+            <p className="text-xs text-slate-400 dark:text-slate-500 text-center">
+              Only pending requests can be edited or cancelled.
             </p>
           </div>
         )}
 
         {req.status !== "pending" && (
           <div className="mt-6 flex justify-center">
-            <a href="/sos/my-requests" className="py-3 px-6 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition-colors">
-              Back to My Requests
-            </a>
+            <a href="/sos/my-requests" className="py-3 px-6 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition-colors">Back to My Requests</a>
           </div>
         )}
       </div>
+
+      {/* Edit Modal */}
+      {editOpen && editForm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={() => { if (!saving) setEditOpen(false); }}>
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-5 py-4 shrink-0">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">Edit SOS Request</h2>
+              <button type="button" onClick={() => { if (!saving) setEditOpen(false); }} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div className="overflow-y-auto px-5 py-4 space-y-4">
+              <fieldset>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Emergency Type</label>
+                <select value={editForm.emergency_type} onChange={(e) => updateField("emergency_type", e.target.value)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/30 px-3 py-2 text-sm text-slate-900 dark:text-slate-200 focus-visible:outline-2 focus-visible:outline-red-500">
+                  {EMERGENCY_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>{t.emoji} {t.label}</option>
+                  ))}
+                </select>
+              </fieldset>
+              <fieldset>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Severity</label>
+                <select value={editForm.severity} onChange={(e) => updateField("severity", e.target.value)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/30 px-3 py-2 text-sm text-slate-900 dark:text-slate-200 focus-visible:outline-2 focus-visible:outline-red-500">
+                  {SEVERITIES.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
+              </fieldset>
+              <div className="grid grid-cols-2 gap-3">
+                {(["adults_count", "children_count", "elderly_count", "injured_count"] as const).map((field) => (
+                  <fieldset key={field}>
+                    <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 capitalize">{field.replace("_count", "")}</label>
+                    <input type="number" min="0" value={editForm[field]} onChange={(e) => updateField(field, Math.max(0, parseInt(e.target.value) || 0))} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/30 px-3 py-2 text-sm text-slate-900 dark:text-slate-200 focus-visible:outline-2 focus-visible:outline-red-500" />
+                  </fieldset>
+                ))}
+              </div>
+              <fieldset>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Address</label>
+                <input type="text" value={editForm.address} onChange={(e) => updateField("address", e.target.value)} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/30 px-3 py-2 text-sm text-slate-900 dark:text-slate-200 focus-visible:outline-2 focus-visible:outline-red-500" />
+              </fieldset>
+              <fieldset>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Description</label>
+                <textarea value={editForm.description} onChange={(e) => updateField("description", e.target.value)} rows={3} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/30 px-3 py-2 text-sm text-slate-900 dark:text-slate-200 focus-visible:outline-2 focus-visible:outline-red-500 resize-none" />
+              </fieldset>
+              <fieldset>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">Immediate Needs</label>
+                <div className="flex flex-wrap gap-2">
+                  {["Medical Aid", "Rescue", "Food", "Water", "Shelter", "Fire Extinguishing", "Evacuation", "Search"].map((need) => (
+                    <button
+                      key={need}
+                      type="button"
+                      onClick={() => toggleNeed(need)}
+                      className={cn(
+                        "px-3 py-1 rounded-full text-xs font-semibold border transition-all",
+                        editForm.immediate_needs.includes(need)
+                          ? "bg-red-500 text-white border-red-500"
+                          : "bg-white dark:bg-slate-800/30 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-red-300"
+                      )}
+                    >
+                      {need}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+              {editResult && (
+                <div className={cn(
+                  "p-3 rounded-xl text-sm font-semibold flex items-center gap-2",
+                  editResult.includes("successfully")
+                    ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300"
+                    : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300"
+                )}>
+                  {editResult.includes("successfully") ? "✅" : "⚠️"} {editResult}
+                </div>
+              )}
+            </div>
+            <div className="flex gap-3 border-t border-slate-200 dark:border-slate-800 px-5 py-4 shrink-0">
+              <button type="button" onClick={() => setEditOpen(false)} disabled={saving} className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-400 transition hover:bg-slate-50 dark:hover:bg-slate-800">
+                Cancel
+              </button>
+              <button type="button" onClick={handleSaveEdit} disabled={saving} className="flex-1 rounded-xl bg-amber-600 py-2.5 text-sm font-bold text-white transition hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                {saving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

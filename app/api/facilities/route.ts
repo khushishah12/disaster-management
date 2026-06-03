@@ -121,7 +121,7 @@ export const GET = async (req: Request) => {
         etaMinutes: etaMinutes(fType, dist),
         capacity,
         availability,
-        phone: el.tags.phone,
+        phone: el.tags.phone ?? el.tags["contact:phone"],
         operator: el.tags.operator,
       });
     }

@@ -24,6 +24,14 @@ const SOS_CARDS = [
     label: "My Requests",
     description: "View your submitted requests",
   },
+  {
+    href: "/sos/profile",
+    icon: "👤",
+    title: "Emergency Profile",
+    label: "Emergency Profile",
+    description: "Manage your medical info & contacts",
+  },
+
 ] as const;
 
 export function SosEmergencyCenter({ appRole }: SosEmergencyCenterProps) {

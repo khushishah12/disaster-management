@@ -103,7 +103,7 @@ export const ROUTE_ACCESS: RouteAccess[] = [
   { path: "/sos/create", label: "New SOS", icon: "🆘", roles: ["civilian"] },
   { path: "/sos/my-requests", label: "My Requests", icon: "📋", roles: ["civilian"] },
   { path: "/sos/profile", label: "Emergency Profile", icon: "👤", roles: ["civilian"] },
-  { path: "/sos/nearby", label: "Nearby Help", icon: "📍", roles: ["civilian"] },
+
   {
     path: "/sos/all-requests",
     label: "All Requests",

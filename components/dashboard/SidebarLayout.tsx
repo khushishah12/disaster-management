@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Sidebar, type TabId } from "@/components/dashboard/Sidebar";
 import { SosEmergencyCenter } from "@/components/sos/SosEmergencyCenter";
+import { NearbyHelpPanel } from "@/components/sos/NearbyHelpPanel";
 import { CompleteProfileModal } from "@/components/sos/CompleteProfileModal";
 import { signOut } from "@/lib/auth/actions";
 import type { AppRole } from "@/lib/sos/roles";
@@ -39,6 +40,7 @@ const TAB_CONTENT: Record<TabId, { label: string }> = {
   analytics: { label: "Incident History and Analytics" },
   "data-contribution": { label: "Data Contribution Feature" },
   sos: { label: "SOS Emergency" },
+  "nearby-help": { label: "Nearby Help" },
 };
 
 export const SidebarLayout = ({
@@ -90,6 +92,9 @@ export const SidebarLayout = ({
     if (activeTab === "ai-intel") return <AiResponseDashboard />;
     if (activeTab === "sos") {
       return <SosEmergencyCenter appRole={appRole} />;
+    }
+    if (activeTab === "nearby-help") {
+      return <NearbyHelpPanel />;
     }
     return <PlaceholderContent label={TAB_CONTENT[activeTab].label} />;
   }, [activeTab, children, appRole]);
