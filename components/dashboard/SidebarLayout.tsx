@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Sidebar, type TabId } from "@/components/dashboard/Sidebar";
+import { ROLE_LABELS } from "@/lib/sos/roles";
 import { SosEmergencyCenter } from "@/components/sos/SosEmergencyCenter";
 import { NearbyHelpPanel } from "@/components/sos/NearbyHelpPanel";
 import { CompleteProfileModal } from "@/components/sos/CompleteProfileModal";
@@ -12,6 +13,10 @@ import type { AppRole } from "@/lib/sos/roles";
 
 const AiResponseDashboard = dynamic(
   () => import("@/components/ai-response/AiResponseDashboard").then((m) => m.AiResponseDashboard),
+  { ssr: false },
+);
+const RescueTeamsPanel = dynamic(
+  () => import("@/components/dashboard/RescueTeamsPanel").then((m) => m.RescueTeamsPanel),
   { ssr: false },
 );
 
@@ -90,6 +95,7 @@ export const SidebarLayout = ({
   const content = useMemo(() => {
     if (activeTab === "operations") return children;
     if (activeTab === "ai-intel") return <AiResponseDashboard />;
+    if (activeTab === "rescue-teams") return <RescueTeamsPanel appRole={appRole} />;
     if (activeTab === "sos") {
       return <SosEmergencyCenter appRole={appRole} />;
     }
@@ -154,7 +160,7 @@ export const SidebarLayout = ({
 
           <div className="flex shrink-0 items-center gap-3">
             <span className="hidden rounded-full border border-teal-500/30 bg-teal-500/10 px-3 py-1 text-xs font-medium text-teal-200 sm:inline-flex">
-              {appRole === "civilian" ? "Civilian" : appRole === "coordinator" ? "Coordinator" : appRole === "rescue_team" ? "Rescue Team" : appRole === "ambulance_team" ? "Ambulance Team" : appRole === "fire_response" ? "Fire Response" : appRole}
+              {ROLE_LABELS[appRole] ?? appRole}
             </span>
             <button
               type="button"

@@ -10,7 +10,7 @@ export type AppRole = (typeof ROLES)[number];
 
 export const ROLE_LABELS: Record<AppRole, string> = {
   civilian: "Civilian",
-  coordinator: "Coordinator",
+  coordinator: "Disaster Coordinator",
   rescue_team: "Rescue Team",
   ambulance_team: "Ambulance Team",
   fire_response: "Fire Response",
@@ -24,19 +24,7 @@ export const ROLE_COLORS: Record<AppRole, string> = {
   fire_response: "#f97316",
 };
 
-const ROLE_HIERARCHY: Record<AppRole, number> = {
-  civilian: 0,
-  rescue_team: 1,
-  ambulance_team: 1,
-  fire_response: 1,
-  coordinator: 2,
-};
-
-function gte(role: AppRole, min: AppRole): boolean {
-  return ROLE_HIERARCHY[role] >= ROLE_HIERARCHY[min];
-}
-
-export function canCreateSOS(_role: AppRole): boolean {
+export function canCreateSOS(): boolean {
   return true;
 }
 
@@ -52,7 +40,7 @@ export function canAssignTeams(role: AppRole): boolean {
   return role === "coordinator";
 }
 
-export function canManageUsers(_role: AppRole): boolean {
+export function canManageUsers(): boolean {
   return false;
 }
 
@@ -80,7 +68,7 @@ export function canViewAllMedia(role: AppRole): boolean {
   return role !== "civilian";
 }
 
-export function canDeleteRequest(_role: AppRole): boolean {
+export function canDeleteRequest(): boolean {
   return false;
 }
 
