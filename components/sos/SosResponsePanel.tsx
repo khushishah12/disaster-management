@@ -8,8 +8,9 @@ import {
   getAllSosRequests,
   assignTeamToSosRequest,
   updateSosRequestStatus,
-  getAvailableResponders,
+  getSosRequestAssignments,
   type SosRequestWithProfile,
+  type SosAssignment,
 } from "@/lib/sos/actions";
 
 // ─── Priority computation ───────────────────────────────────────────
@@ -97,40 +98,37 @@ const STATUS_STYLES: Record<string, string> = {
 
 // ─── Assign Modal ───────────────────────────────────────────────────
 
+const TEAM_OPTIONS = [
+  { value: "rescue_team", label: "Rescue Team" },
+  { value: "ambulance_team", label: "Ambulance Team" },
+  { value: "fire_response", label: "Fire Response" },
+];
+
 const AssignModal = ({
   request,
+  existingTeams,
   onClose,
 }: {
   request: SosRequestWithProfile;
+  existingTeams: string[];
   onClose: () => void;
 }) => {
   const queryClient = useQueryClient();
-  const [teamType, setTeamType] = useState("rescue_team");
-  const [assignedTo, setAssignedTo] = useState("");
+  const availableTeams = TEAM_OPTIONS.filter((t) => !existingTeams.includes(t.value));
+  const [teamType, setTeamType] = useState(availableTeams[0]?.value ?? "");
   const [eta, setEta] = useState("");
-
-  const { data: responders } = useQuery({
-    queryKey: ["responders"],
-    queryFn: () => getAvailableResponders(),
-  });
-
-  const filteredResponders = useMemo(
-    () =>
-      (responders?.data ?? []).filter((r) => r.app_role === teamType),
-    [responders, teamType],
-  );
 
   const assignMut = useMutation({
     mutationFn: () =>
       assignTeamToSosRequest(
         request.id,
         teamType,
-        assignedTo,
         eta ? parseInt(eta) : undefined,
       ),
     onSuccess: (res) => {
       if (res.success) {
         queryClient.invalidateQueries({ queryKey: ["sos-requests"] });
+        queryClient.invalidateQueries({ queryKey: ["sos-assignments"] });
         onClose();
       }
     },
@@ -149,32 +147,18 @@ const AssignModal = ({
             <label className="mb-1 block text-xs font-medium text-slate-400">Team Type</label>
             <select
               value={teamType}
-              onChange={(e) => { setTeamType(e.target.value); setAssignedTo(""); }}
+              onChange={(e) => setTeamType(e.target.value)}
               className="w-full rounded-xl border border-slate-700 bg-slate-800/80 px-3 py-2 text-sm text-slate-200 outline-none focus:border-teal-600"
             >
-              <option value="rescue_team">Rescue Team</option>
-              <option value="ambulance_team">Ambulance Team</option>
-              <option value="fire_response">Fire Response</option>
-              <option value="volunteer">Volunteer</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-400">
-              Assign To
-            </label>
-            <select
-              value={assignedTo}
-              onChange={(e) => setAssignedTo(e.target.value)}
-              className="w-full rounded-xl border border-slate-700 bg-slate-800/80 px-3 py-2 text-sm text-slate-200 outline-none focus:border-teal-600"
-            >
-              <option value="">Select a responder...</option>
-              {filteredResponders.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.full_name} ({r.app_role})
-                </option>
+              {availableTeams.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
               ))}
             </select>
+            {existingTeams.length > 0 && (
+              <p className="mt-1 text-[10px] text-slate-500">
+                Already assigned: {existingTeams.map((t) => TEAM_OPTIONS.find((o) => o.value === t)?.label || t).join(", ")}
+              </p>
+            )}
           </div>
 
           <div>
@@ -205,7 +189,7 @@ const AssignModal = ({
             </button>
             <button
               onClick={() => assignMut.mutate()}
-              disabled={assignMut.isPending || !assignedTo}
+              disabled={assignMut.isPending}
               className="rounded-xl bg-teal-600 px-4 py-2 text-xs font-medium text-white transition hover:bg-teal-500 disabled:opacity-50"
             >
               {assignMut.isPending ? "Assigning..." : "Assign Team"}
@@ -219,6 +203,12 @@ const AssignModal = ({
 
 // ─── Detail Modal ───────────────────────────────────────────────────
 
+const TEAM_LABELS: Record<string, string> = {
+  rescue_team: "Rescue Team",
+  ambulance_team: "Ambulance Team",
+  fire_response: "Fire Response",
+};
+
 const DetailModal = ({
   request,
   onClose,
@@ -226,118 +216,165 @@ const DetailModal = ({
 }: {
   request: SosRequestWithProfile;
   onClose: () => void;
-  onAssign: () => void;
-}) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-    <div className="mx-4 w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-700/50 bg-slate-900/95 p-6 shadow-2xl">
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-lg font-bold text-slate-100">{request.ticket_number}</span>
-            <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${STATUS_STYLES[request.status]}`}>
-              {STATUS_LABELS[request.status] || request.status}
-            </span>
-            <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${PRIORITY_BADGE[computePriority(request)]}`}>
-              {computePriority(request).toUpperCase()}
-            </span>
-          </div>
-          <p className="mt-1 text-xs text-slate-500">
-            {EMERGENCY_LABELS[request.emergency_type] || request.emergency_type}
-            {request.severity ? ` · ${request.severity}` : ""}
-          </p>
-        </div>
-        <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-lg">&times;</button>
-      </div>
+  onAssign: (existingTeams: string[]) => void;
+}) => {
+  const { data: assignments } = useQuery({
+    queryKey: ["sos-assignments", request.id],
+    queryFn: () => getSosRequestAssignments(request.id),
+  });
 
-      <div className="mt-5 grid gap-4 sm:grid-cols-2 text-sm">
-        <div>
-          <span className="text-xs text-slate-500">Address</span>
-          <p className="text-slate-200">{request.address || "N/A"}</p>
-        </div>
-        <div>
-          <span className="text-xs text-slate-500">People Affected</span>
-          <p className="text-slate-200">
-            {request.adults_count || 0} adults, {request.children_count || 0} children,
-            {request.elderly_count || 0} elderly
-            {request.injured_count ? `, ${request.injured_count} injured` : ""}
-          </p>
-        </div>
-        <div>
-          <span className="text-xs text-slate-500">Contact</span>
-          <p className="text-slate-200">{request.phone_number || "N/A"}</p>
-        </div>
-        <div>
-          <span className="text-xs text-slate-500">Submitted By</span>
-          <p className="text-slate-200">{request.profiles?.full_name || "Unknown"}</p>
-        </div>
-        <div>
-          <span className="text-xs text-slate-500">Submitted At</span>
-          <p className="text-slate-400">{new Date(request.created_at).toLocaleString("en-IN")}</p>
-        </div>
-        {request.alternate_contact && (
+  const queryClient = useQueryClient();
+  const assignedTeams = (assignments?.data ?? []).map((a) => a.assigned_team);
+  const assignedList = assignments?.data ?? [];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="mx-4 w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-700/50 bg-slate-900/95 p-6 shadow-2xl">
+        <div className="flex items-start justify-between">
           <div>
-            <span className="text-xs text-slate-500">Alternate Contact</span>
-            <p className="text-slate-200">{request.alternate_contact}</p>
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-bold text-slate-100">{request.ticket_number}</span>
+              <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${STATUS_STYLES[request.status]}`}>
+                {STATUS_LABELS[request.status] || request.status}
+              </span>
+              <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${PRIORITY_BADGE[computePriority(request)]}`}>
+                {computePriority(request).toUpperCase()}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              {EMERGENCY_LABELS[request.emergency_type] || request.emergency_type}
+              {request.severity ? ` · ${request.severity}` : ""}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-lg">&times;</button>
+        </div>
+
+        <div className="mt-5 grid gap-4 sm:grid-cols-2 text-sm">
+          <div>
+            <span className="text-xs text-slate-500">Address</span>
+            <p className="text-slate-200">{request.address || "N/A"}</p>
+          </div>
+          <div>
+            <span className="text-xs text-slate-500">People Affected</span>
+            <p className="text-slate-200">
+              {request.adults_count || 0} adults, {request.children_count || 0} children,
+              {request.elderly_count || 0} elderly
+              {request.injured_count ? `, ${request.injured_count} injured` : ""}
+            </p>
+          </div>
+          <div>
+            <span className="text-xs text-slate-500">Contact</span>
+            <p className="text-slate-200">{request.phone_number || "N/A"}</p>
+          </div>
+          <div>
+            <span className="text-xs text-slate-500">Submitted By</span>
+            <p className="text-slate-200">{request.profiles?.full_name || "Unknown"}</p>
+          </div>
+          <div>
+            <span className="text-xs text-slate-500">Submitted At</span>
+            <p className="text-slate-400">{new Date(request.created_at).toLocaleString("en-IN")}</p>
+          </div>
+          {request.alternate_contact && (
+            <div>
+              <span className="text-xs text-slate-500">Alternate Contact</span>
+              <p className="text-slate-200">{request.alternate_contact}</p>
+            </div>
+          )}
+        </div>
+
+        {request.description && (
+          <div className="mt-4">
+            <span className="text-xs text-slate-500">Description</span>
+            <p className="mt-1 text-sm text-slate-300">{request.description}</p>
           </div>
         )}
-      </div>
 
-      {request.description && (
-        <div className="mt-4">
-          <span className="text-xs text-slate-500">Description</span>
-          <p className="mt-1 text-sm text-slate-300">{request.description}</p>
-        </div>
-      )}
-
-      {request.immediate_needs && (request.immediate_needs as string[]).length > 0 && (
-        <div className="mt-4">
-          <span className="text-xs text-slate-500">Immediate Needs</span>
-          <div className="mt-1 flex flex-wrap gap-1.5">
-            {(request.immediate_needs as string[]).map((need, i) => (
-              <span key={i} className="rounded-lg bg-slate-800 px-2 py-1 text-[10px] text-slate-300">{need}</span>
-            ))}
+        {request.immediate_needs && (request.immediate_needs as string[]).length > 0 && (
+          <div className="mt-4">
+            <span className="text-xs text-slate-500">Immediate Needs</span>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {(request.immediate_needs as string[]).map((need, i) => (
+                <span key={i} className="rounded-lg bg-slate-800 px-2 py-1 text-[10px] text-slate-300">{need}</span>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
-
-      <div className="mt-6 flex flex-wrap gap-2 border-t border-slate-800 pt-4">
-        <button
-          onClick={onAssign}
-          className="rounded-xl bg-teal-600 px-5 py-2 text-xs font-medium text-white transition hover:bg-teal-500"
-        >
-          Assign Team
-        </button>
-        {request.status !== "closed" && request.status !== "cancelled" && (
-          <>
-            <button
-              onClick={async () => {
-                const nextStatus =
-                  request.status === "pending"
-                    ? "acknowledged"
-                    : request.status === "acknowledged"
-                      ? "in_progress"
-                      : "rescued";
-                const supabase = (await import("@/lib/supabase/client")).createClient();
-                await updateSosRequestStatus(request.id, nextStatus);
-              }}
-              className="rounded-xl border border-slate-700 bg-slate-800/80 px-4 py-2 text-xs font-medium text-slate-300 transition hover:border-slate-600"
-            >
-              Mark {request.status === "pending" ? "Acknowledged" : request.status === "acknowledged" ? "In Progress" : "Rescued"}
-            </button>
-            <button
-              onClick={async () => {
-                await updateSosRequestStatus(request.id, "closed");
-              }}
-              className="rounded-xl border border-red-700/50 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-400 transition hover:bg-red-500/20"
-            >
-              Close Request
-            </button>
-          </>
         )}
+
+        {/* Assigned Teams */}
+        <div className="mt-5 border-t border-slate-800 pt-4">
+          <span className="text-xs font-medium text-slate-400">Assigned Teams</span>
+          {assignedList.length === 0 ? (
+            <p className="mt-2 text-xs text-slate-600">No teams assigned yet.</p>
+          ) : (
+            <div className="mt-2 space-y-2">
+              {assignedList.map((a) => (
+                <div
+                  key={a.id}
+                  className="flex items-center justify-between rounded-xl border border-slate-700/50 bg-slate-800/40 px-3 py-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-slate-200">
+                      {TEAM_LABELS[a.assigned_team] || a.assigned_team}
+                    </span>
+                    {a.eta && (
+                      <span className="text-[10px] text-slate-500">ETA {a.eta}min</span>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-slate-500">
+                    {new Date(a.dispatch_time).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-800 pt-4">
+          <button
+            onClick={() => onAssign(assignedTeams)}
+            className="rounded-xl bg-teal-600 px-5 py-2 text-xs font-medium text-white transition hover:bg-teal-500"
+          >
+            {assignedTeams.length === 0 ? "Assign Team" : "Assign Another Team"}
+          </button>
+          {request.status !== "closed" && request.status !== "cancelled" && (
+            <>
+              {request.status !== "rescued" && (
+                <button
+                  onClick={async () => {
+                    const nextStatus =
+                      request.status === "pending"
+                        ? "acknowledged"
+                        : request.status === "acknowledged"
+                          ? "in_progress"
+                          : "rescued";
+                    await updateSosRequestStatus(request.id, nextStatus);
+                    queryClient.invalidateQueries({ queryKey: ["sos-requests"] });
+                    queryClient.invalidateQueries({ queryKey: ["sos-assignments"] });
+                    onClose();
+                  }}
+                  className="rounded-xl border border-slate-700 bg-slate-800/80 px-4 py-2 text-xs font-medium text-slate-300 transition hover:border-slate-600"
+                >
+                  Mark {request.status === "pending" ? "Acknowledged" : request.status === "acknowledged" ? "In Progress" : "Rescued"}
+                </button>
+              )}
+              <button
+                onClick={async () => {
+                  await updateSosRequestStatus(request.id, "closed");
+                  queryClient.invalidateQueries({ queryKey: ["sos-requests"] });
+                  queryClient.invalidateQueries({ queryKey: ["sos-assignments"] });
+                  onClose();
+                }}
+                className="rounded-xl border border-red-700/50 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-400 transition hover:bg-red-500/20"
+              >
+                Close Request
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ─── SOS Request Card ───────────────────────────────────────────────
 
@@ -402,6 +439,7 @@ export const SosResponsePanel = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [detailRequest, setDetailRequest] = useState<SosRequestWithProfile | null>(null);
   const [assignRequest, setAssignRequest] = useState<SosRequestWithProfile | null>(null);
+  const [assignExistingTeams, setAssignExistingTeams] = useState<string[]>([]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["sos-requests", statusFilter],
@@ -519,7 +557,7 @@ export const SosResponsePanel = () => {
         <DetailModal
           request={detailRequest}
           onClose={() => { setDetailRequest(null); queryClient.invalidateQueries({ queryKey: ["sos-requests"] }); }}
-          onAssign={() => { setAssignRequest(detailRequest); setDetailRequest(null); }}
+          onAssign={(existingTeams) => { setAssignExistingTeams(existingTeams); setAssignRequest(detailRequest); setDetailRequest(null); }}
         />
       )}
 
@@ -527,6 +565,7 @@ export const SosResponsePanel = () => {
       {assignRequest && (
         <AssignModal
           request={assignRequest}
+          existingTeams={assignExistingTeams}
           onClose={() => { setAssignRequest(null); queryClient.invalidateQueries({ queryKey: ["sos-requests"] }); }}
         />
       )}

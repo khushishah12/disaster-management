@@ -574,7 +574,6 @@ export async function getAllSosRequests(filters?: {
 export async function assignTeamToSosRequest(
   requestId: string,
   assignedTeam: string,
-  assignedTo: string,
   eta?: number,
 ): Promise<{ success?: string; error?: string }> {
   const supabase = await createClient();
@@ -584,24 +583,93 @@ export async function assignTeamToSosRequest(
   const { data: profile } = await supabase.from("profiles").select("app_role").eq("id", user.id).single();
   if (profile?.app_role !== "coordinator") return { error: "Only coordinators can assign teams." };
 
+  // Check if this team type is already assigned
+  const { data: existing } = await supabase
+    .from("rescue_assignments")
+    .select("id")
+    .eq("request_id", requestId)
+    .eq("assigned_team", assignedTeam)
+    .maybeSingle();
+
+  if (existing) return { error: "This team type is already assigned to this request." };
+
   const { error: assignError } = await supabase.from("rescue_assignments").insert({
     request_id: requestId,
     assigned_team: assignedTeam,
     assigned_role: "rescuer",
-    assigned_to: assignedTo,
+    assigned_to: user.id,
     eta: eta ?? null,
     dispatch_time: new Date().toISOString(),
   });
 
   if (assignError) return { error: "Failed to assign team: " + assignError.message };
 
-  const { error: updateError } = await supabase
+  // Only bump status to acknowledged if it's still pending
+  const { data: current } = await supabase
     .from("sos_requests")
-    .update({ status: "acknowledged" })
-    .eq("id", requestId);
+    .select("status")
+    .eq("id", requestId)
+    .single();
 
-  if (updateError) return { error: "Failed to update request status: " + updateError.message };
+  if (current?.status === "pending") {
+    await supabase.from("sos_requests").update({ status: "acknowledged" }).eq("id", requestId);
+  }
+
   return { success: "Team assigned successfully." };
+}
+
+export type SosAssignment = {
+  id: string;
+  assigned_team: string;
+  eta: number | null;
+  dispatch_time: string;
+  created_at: string;
+};
+
+export async function getSosRequestAssignments(
+  requestId: string,
+): Promise<{ data: SosAssignment[]; error: string | null }> {
+  const supabase = await createClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) return { data: [], error: "Not authenticated." };
+
+  const { data, error } = await supabase
+    .from("rescue_assignments")
+    .select("id, assigned_team, eta, dispatch_time, created_at")
+    .eq("request_id", requestId)
+    .order("created_at", { ascending: true });
+
+  if (error) return { data: [], error: error.message };
+  return { data: data as SosAssignment[], error: null };
+}
+
+export async function getMyTeamAssignments(): Promise<{ data: SosRequestWithProfile[]; error: string | null }> {
+  const supabase = await createClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) return { data: [], error: "Not authenticated." };
+
+  const { data: profile } = await supabase.from("profiles").select("app_role").eq("id", user.id).single();
+  if (!profile?.app_role || profile.app_role === "civilian" || profile.app_role === "coordinator") {
+    return { data: [], error: null };
+  }
+
+  const { data, error } = await supabase
+    .from("sos_requests")
+    .select("*, profiles(full_name, phone), rescue_assignments!inner(assigned_team)")
+    .eq("rescue_assignments.assigned_team", profile.app_role)
+    .in("status", ["acknowledged", "in_progress"])
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    const { data: fallback } = await supabase
+      .from("sos_requests")
+      .select("*, profiles(full_name, phone)")
+      .in("status", ["acknowledged", "in_progress"])
+      .order("created_at", { ascending: false });
+    return { data: (fallback ?? []) as SosRequestWithProfile[], error: null };
+  }
+
+  return { data: (data ?? []) as SosRequestWithProfile[], error: null };
 }
 
 export async function updateSosRequestStatus(

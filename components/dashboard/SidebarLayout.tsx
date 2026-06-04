@@ -39,6 +39,10 @@ const SosResponsePanel = dynamic(
   () => import("@/components/sos/SosResponsePanel").then((m) => m.SosResponsePanel),
   { ssr: false },
 );
+const SosAssignmentsPanel = dynamic(
+  () => import("@/components/sos/SosAssignmentsPanel").then((m) => m.SosAssignmentsPanel),
+  { ssr: false },
+);
 
 type SidebarLayoutProps = {
   children: React.ReactNode;
@@ -66,6 +70,7 @@ const TAB_CONTENT: Record<TabId, { label: string }> = {
   "data-contribution": { label: "Data Contributions" },
   "ambulance-ops": { label: "Ambulance Operations" },
   "sos-response": { label: "SOS Response Management" },
+  "sos-assignments": { label: "SOS Assignments" },
   sos: { label: "SOS Emergency" },
   "nearby-help": { label: "Nearby Help" },
 };
@@ -138,6 +143,9 @@ export const SidebarLayout = ({
     }
     if (activeTab === "sos-response") {
       return <SosResponsePanel />;
+    }
+    if (activeTab === "sos-assignments") {
+      return <SosAssignmentsPanel />;
     }
     return <PlaceholderContent label={TAB_CONTENT[activeTab].label} />;
   }, [activeTab, children, appRole]);
