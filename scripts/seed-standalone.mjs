@@ -82,10 +82,11 @@ async function insertSupabase(rows) {
       "Content-Type": "application/json",
       "apikey": SUPABASE_ANON_KEY,
       "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-      "Prefer": "resolution=merge-duplicates",
+      "Prefer": "resolution=ignore-duplicates",
     },
     body: JSON.stringify(rows),
   });
+  if (res.status === 409) return; // duplicate — already seeded
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Supabase insert error (${res.status}): ${text.slice(0, 200)}`);

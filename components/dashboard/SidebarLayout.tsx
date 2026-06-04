@@ -19,6 +19,10 @@ const RescueTeamsPanel = dynamic(
   () => import("@/components/dashboard/RescueTeamsPanel").then((m) => m.RescueTeamsPanel),
   { ssr: false },
 );
+const HospitalsSheltersPanel = dynamic(
+  () => import("@/components/dashboard/HospitalsSheltersPanel").then((m) => m.HospitalsSheltersPanel),
+  { ssr: false },
+);
 
 type SidebarLayoutProps = {
   children: React.ReactNode;
@@ -96,6 +100,9 @@ export const SidebarLayout = ({
     if (activeTab === "operations") return children;
     if (activeTab === "ai-intel") return <AiResponseDashboard />;
     if (activeTab === "rescue-teams") return <RescueTeamsPanel appRole={appRole} />;
+    if (activeTab === "hospitals") {
+      return <HospitalsSheltersPanel />;
+    }
     if (activeTab === "sos") {
       return <SosEmergencyCenter appRole={appRole} />;
     }
