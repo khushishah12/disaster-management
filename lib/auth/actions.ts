@@ -196,6 +196,8 @@ function mapRoleToAppRole(role: string) {
     case "rescue_team": return "rescue_team";
     case "ambulance_team": return "ambulance_team";
     case "fire_response": return "fire_response";
+    case "hospital_coordinator": return "hospital_coordinator";
+    case "shelter_department": return "shelter_department";
     default: return "civilian";
   }
 }

@@ -33,7 +33,7 @@ type SidebarProps = {
 };
 
 const ALL_ROLES: AppRole[] = ["civilian", "coordinator", "rescue_team", "ambulance_team", "fire_response"];
-const RESPONDER_ROLES: AppRole[] = ["coordinator", "rescue_team"];
+const RESPONDER_ROLES: AppRole[] = ["coordinator"];
 
 const NAV_ITEMS: NavItem[] = [
   {

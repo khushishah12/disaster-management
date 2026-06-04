@@ -4,6 +4,8 @@ export const ROLES = [
   "rescue_team",
   "ambulance_team",
   "fire_response",
+  "hospital_coordinator",
+  "shelter_department",
 ] as const;
 
 export type AppRole = (typeof ROLES)[number];
@@ -14,6 +16,8 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   rescue_team: "Rescue Team",
   ambulance_team: "Ambulance Team",
   fire_response: "Fire Response",
+  hospital_coordinator: "Hospital Coordinator",
+  shelter_department: "Shelter Department",
 };
 
 export const ROLE_COLORS: Record<AppRole, string> = {
@@ -22,6 +26,8 @@ export const ROLE_COLORS: Record<AppRole, string> = {
   rescue_team: "#f59e0b",
   ambulance_team: "#3b82f6",
   fire_response: "#f97316",
+  hospital_coordinator: "#ec4899",
+  shelter_department: "#14b8a6",
 };
 
 export function canCreateSOS(): boolean {

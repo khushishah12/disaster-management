@@ -11,6 +11,8 @@ const ROLES = [
   "rescue_team",
   "ambulance_team",
   "fire_response",
+  "hospital_coordinator",
+  "shelter_department",
 ] as const;
 
 const ROLE_DISPLAY: Record<string, string> = {
@@ -19,6 +21,8 @@ const ROLE_DISPLAY: Record<string, string> = {
   rescue_team: "Rescue Team",
   ambulance_team: "Ambulance Team",
   fire_response: "Fire Response",
+  hospital_coordinator: "Hospital Coordinator",
+  shelter_department: "Shelter Department",
 };
 
 type PasswordStrength = "empty" | "weak" | "fair" | "good" | "strong";
@@ -412,9 +416,9 @@ export default function ReliefWorkerRegistration() {
                   ) : (
                     <InputField
                       id="organization"
-                      label="Organization / NGO Name"
+                      label={form.role === "hospital_coordinator" ? "Hospital Name" : "Organization / NGO Name"}
                       icon={<IconBuilding className="h-4 w-4" />}
-                      placeholder="Relief organization name"
+                      placeholder={form.role === "hospital_coordinator" ? "Hospital / medical facility name" : "Relief organization name"}
                       value={form.organization}
                       onChange={(v) => update("organization", v)}
                     />
