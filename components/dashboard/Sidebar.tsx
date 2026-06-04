@@ -130,7 +130,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     id: "data-contribution",
-    label: "Data Contribution Feature",
+    label: "Data Contributions",
     roles: RESPONDER_ROLES,
     icon: (
       <svg
