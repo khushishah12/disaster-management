@@ -12,6 +12,8 @@ export type TabId =
   | "analytics"
   | "data-contribution"
   | "ambulance-ops"
+  | "fire-ops"
+  | "rescue-ops"
   | "sos-response"
   | "sos-assignments"
   | "sos"
@@ -31,7 +33,7 @@ type SidebarProps = {
 };
 
 const ALL_ROLES: AppRole[] = ["civilian", "coordinator", "rescue_team", "ambulance_team", "fire_response"];
-const RESPONDER_ROLES: AppRole[] = ["coordinator", "rescue_team", "fire_response"];
+const RESPONDER_ROLES: AppRole[] = ["coordinator", "rescue_team"];
 
 const NAV_ITEMS: NavItem[] = [
   {
@@ -177,6 +179,31 @@ const NAV_ITEMS: NavItem[] = [
         <line x1="16" y1="13" x2="8" y2="13" />
         <line x1="16" y1="17" x2="8" y2="17" />
         <polyline points="10 9 9 9 8 9" />
+      </svg>
+    ),
+  },
+  {
+    id: "fire-ops",
+    label: "Fire Response Ops",
+    roles: ["fire_response"],
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+        <path d="M2 17l10 5 10-5" />
+        <path d="M2 12l10 5 10-5" />
+      </svg>
+    ),
+  },
+  {
+    id: "rescue-ops",
+    label: "Rescue Ops",
+    roles: ["rescue_team"],
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 12h-4l-3 9H9l-3-9H2" />
+        <circle cx="12" cy="5" r="2" />
+        <path d="M12 8v4" />
+        <path d="M12 16h.01" />
       </svg>
     ),
   },

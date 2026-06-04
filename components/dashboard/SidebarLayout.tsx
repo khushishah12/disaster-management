@@ -43,6 +43,14 @@ const SosAssignmentsPanel = dynamic(
   () => import("@/components/sos/SosAssignmentsPanel").then((m) => m.SosAssignmentsPanel),
   { ssr: false },
 );
+const FireResponseOpsPanel = dynamic(
+  () => import("@/components/fire/FireResponseOpsPanel").then((m) => m.FireResponseOpsPanel),
+  { ssr: false },
+);
+const RescueOpsPanel = dynamic(
+  () => import("@/components/rescue/RescueOpsPanel").then((m) => m.RescueOpsPanel),
+  { ssr: false },
+);
 
 type SidebarLayoutProps = {
   children: React.ReactNode;
@@ -69,6 +77,8 @@ const TAB_CONTENT: Record<TabId, { label: string }> = {
   analytics: { label: "Incident History and Analytics" },
   "data-contribution": { label: "Data Contributions" },
   "ambulance-ops": { label: "Ambulance Operations" },
+  "fire-ops": { label: "Fire Response Ops" },
+  "rescue-ops": { label: "Rescue Ops" },
   "sos-response": { label: "SOS Response Management" },
   "sos-assignments": { label: "SOS Assignments" },
   sos: { label: "SOS Emergency" },
@@ -140,6 +150,12 @@ export const SidebarLayout = ({
     }
     if (activeTab === "ambulance-ops") {
       return <AmbulanceOpsPanel />;
+    }
+    if (activeTab === "fire-ops") {
+      return <FireResponseOpsPanel />;
+    }
+    if (activeTab === "rescue-ops") {
+      return <RescueOpsPanel />;
     }
     if (activeTab === "sos-response") {
       return <SosResponsePanel />;
