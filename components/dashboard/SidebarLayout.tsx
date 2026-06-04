@@ -23,6 +23,10 @@ const HospitalsSheltersPanel = dynamic(
   () => import("@/components/dashboard/HospitalsSheltersPanel").then((m) => m.HospitalsSheltersPanel),
   { ssr: false },
 );
+const IncidentHistoryAnalyticsPanel = dynamic(
+  () => import("@/components/analytics/IncidentHistoryAnalyticsPanel").then((m) => m.IncidentHistoryAnalyticsPanel),
+  { ssr: false },
+);
 
 type SidebarLayoutProps = {
   children: React.ReactNode;
@@ -108,6 +112,9 @@ export const SidebarLayout = ({
     }
     if (activeTab === "nearby-help") {
       return <NearbyHelpPanel />;
+    }
+    if (activeTab === "analytics") {
+      return <IncidentHistoryAnalyticsPanel />;
     }
     return <PlaceholderContent label={TAB_CONTENT[activeTab].label} />;
   }, [activeTab, children, appRole]);
