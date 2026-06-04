@@ -31,6 +31,14 @@ const DataContributionPanel = dynamic(
   () => import("@/components/analytics/DataContributionPanel").then((m) => m.DataContributionPanel),
   { ssr: false },
 );
+const AmbulanceOpsPanel = dynamic(
+  () => import("@/components/ambulance/AmbulanceOpsPanel").then((m) => m.AmbulanceOpsPanel),
+  { ssr: false },
+);
+const SosResponsePanel = dynamic(
+  () => import("@/components/sos/SosResponsePanel").then((m) => m.SosResponsePanel),
+  { ssr: false },
+);
 
 type SidebarLayoutProps = {
   children: React.ReactNode;
@@ -56,6 +64,8 @@ const TAB_CONTENT: Record<TabId, { label: string }> = {
   hospitals: { label: "Hospitals and Shelters" },
   analytics: { label: "Incident History and Analytics" },
   "data-contribution": { label: "Data Contributions" },
+  "ambulance-ops": { label: "Ambulance Operations" },
+  "sos-response": { label: "SOS Response Management" },
   sos: { label: "SOS Emergency" },
   "nearby-help": { label: "Nearby Help" },
 };
@@ -122,6 +132,12 @@ export const SidebarLayout = ({
     }
     if (activeTab === "data-contribution") {
       return <DataContributionPanel />;
+    }
+    if (activeTab === "ambulance-ops") {
+      return <AmbulanceOpsPanel />;
+    }
+    if (activeTab === "sos-response") {
+      return <SosResponsePanel />;
     }
     return <PlaceholderContent label={TAB_CONTENT[activeTab].label} />;
   }, [activeTab, children, appRole]);

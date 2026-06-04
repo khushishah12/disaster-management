@@ -541,6 +541,97 @@ export async function getCityFacilities(
   };
 }
 
+// --- Coordinator SOS Management ---
+
+export type SosRequestWithProfile = SosRequestRow & {
+  profiles: { full_name: string; phone: string | null } | null;
+};
+
+export async function getAllSosRequests(filters?: {
+  status?: string;
+  severity?: string;
+}): Promise<{ data: SosRequestWithProfile[]; error: string | null }> {
+  const supabase = await createClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) return { data: [], error: "Not authenticated." };
+
+  const { data: profile } = await supabase.from("profiles").select("app_role").eq("id", user.id).single();
+  if (profile?.app_role !== "coordinator") return { data: [], error: "Access denied." };
+
+  let query = supabase
+    .from("sos_requests")
+    .select("*, profiles(full_name, phone)")
+    .order("created_at", { ascending: false });
+
+  if (filters?.status) query = query.eq("status", filters.status);
+  if (filters?.severity) query = query.eq("severity", filters.severity);
+
+  const { data, error } = await query;
+  if (error) return { data: [], error: error.message };
+  return { data: data as SosRequestWithProfile[], error: null };
+}
+
+export async function assignTeamToSosRequest(
+  requestId: string,
+  assignedTeam: string,
+  assignedTo: string,
+  eta?: number,
+): Promise<{ success?: string; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) return { error: "Not authenticated." };
+
+  const { data: profile } = await supabase.from("profiles").select("app_role").eq("id", user.id).single();
+  if (profile?.app_role !== "coordinator") return { error: "Only coordinators can assign teams." };
+
+  const { error: assignError } = await supabase.from("rescue_assignments").insert({
+    request_id: requestId,
+    assigned_team: assignedTeam,
+    assigned_role: "rescuer",
+    assigned_to: assignedTo,
+    eta: eta ?? null,
+    dispatch_time: new Date().toISOString(),
+  });
+
+  if (assignError) return { error: "Failed to assign team: " + assignError.message };
+
+  const { error: updateError } = await supabase
+    .from("sos_requests")
+    .update({ status: "acknowledged" })
+    .eq("id", requestId);
+
+  if (updateError) return { error: "Failed to update request status: " + updateError.message };
+  return { success: "Team assigned successfully." };
+}
+
+export async function updateSosRequestStatus(
+  requestId: string,
+  status: string,
+): Promise<{ success?: string; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) return { error: "Not authenticated." };
+
+  const { data: profile } = await supabase.from("profiles").select("app_role").eq("id", user.id).single();
+  if (profile?.app_role !== "coordinator") return { error: "Only coordinators can update status." };
+
+  const { error } = await supabase.from("sos_requests").update({ status }).eq("id", requestId);
+  if (error) return { error: error.message };
+  return { success: "Status updated." };
+}
+
+export async function getAvailableResponders(): Promise<{ data: { id: string; full_name: string; app_role: string }[]; error: string | null }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, full_name, app_role")
+    .in("app_role", ["rescue_team", "ambulance_team", "fire_response"])
+    .order("full_name");
+
+  if (error) return { data: [], error: error.message };
+  return { data: data as { id: string; full_name: string; app_role: string }[], error: null };
+}
+
 export async function seedCityFacilities(
   city: string,
   state: string,

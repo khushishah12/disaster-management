@@ -3,6 +3,8 @@
 import { redirect } from "next/navigation";
 import { AUTH_ROUTES } from "@/lib/auth/routes";
 import { createClient } from "@/lib/supabase/server";
+import { getSupabaseEnv } from "@/lib/supabase/env";
+import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 export type AuthActionState = {
   error?: string;
@@ -32,6 +34,14 @@ async function resolveEmail(identifier: string) {
   return data as string;
 }
 
+function createServiceRoleClient() {
+  const { supabaseUrl, supabaseServiceRoleKey } = getSupabaseEnv();
+  if (!supabaseServiceRoleKey) throw new Error("Service role key not available");
+  return createAdminClient(supabaseUrl, supabaseServiceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
 export async function signIn(
   _prevState: AuthActionState,
   formData: FormData,
@@ -52,8 +62,44 @@ export async function signIn(
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
+  if (!error) {
+    const next = String(formData.get("next") ?? AUTH_ROUTES.dashboard);
+    redirect(next.startsWith("/") ? next : AUTH_ROUTES.dashboard);
+  }
+
+  // Fallback: GoTrue rejected the login. Try verifying the password directly
+  // via the database (handles users registered via the old RPC bypass).
   if (error) {
-    return { error: error.message };
+    const { data: verifyData, error: verifyError } = await supabase.rpc("verify_user_password", {
+      p_email: email,
+      p_password: password,
+    });
+
+    if (verifyError || !verifyData) {
+      return { error: "Invalid login credentials." };
+    }
+
+    // Password is correct but GoTrue couldn't verify it (likely old RPC-bypass user).
+    // Re-hash the password using GoTrue's bcrypt via the admin API.
+    const adminClient = createServiceRoleClient();
+    const { error: updateError } = await adminClient.auth.admin.updateUserById(
+      verifyData as string,
+      { password },
+    );
+
+    if (updateError) {
+      return { error: "Please try again. If the issue persists, contact support." };
+    }
+
+    // Retry login now that the password has been re-hashed by GoTrue.
+    const { error: retryError } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (retryError) {
+      return { error: "Login failed after rehash. Please try again." };
+    }
+
+    const next = String(formData.get("next") ?? AUTH_ROUTES.dashboard);
+    redirect(next.startsWith("/") ? next : AUTH_ROUTES.dashboard);
   }
 
   const next = String(formData.get("next") ?? AUTH_ROUTES.dashboard);
@@ -94,29 +140,64 @@ export async function signUp(
   try {
     const supabase = await createClient();
 
-    const { data: userId, error: rpcError } = await supabase.rpc("register_user", {
-      p_email: email,
-      p_password: password,
-      p_username: username,
-      p_full_name: fullName,
-      p_phone: phone,
-      p_organization: organization,
-      p_city: city,
-      p_state: state,
-      p_role: role,
-      p_emergency_contact: emergencyContact,
+    // Use the proper GoTrue API so password hashing, identities, and metadata
+    // are all handled correctly. The auto_confirm_email_trigger sets
+    // email_confirmed_at = now() automatically.
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          username,
+          full_name: fullName,
+          phone,
+          organization,
+          city,
+          state,
+          role,
+          emergency_contact: emergencyContact,
+          app_role: role,
+        },
+      },
     });
 
-    if (rpcError || !userId) {
-      console.error("Register RPC failed:", rpcError);
-      return { error: rpcError?.message ?? "Registration failed. Please try again." };
+    if (signUpError) {
+      return { error: signUpError.message };
     }
+
+    if (!data.user) {
+      return { error: "Registration failed. No user returned." };
+    }
+
+    // The handle_new_user trigger already creates the profile, but it may not
+    // include all fields (city, state, organization, app_role). Update it.
+    const appRole = mapRoleToAppRole(role);
+    await supabase.from("profiles").update({
+      username,
+      full_name: fullName,
+      phone: phone || null,
+      organization: organization || null,
+      city: city || null,
+      state: state || null,
+      emergency_contact: emergencyContact || null,
+      app_role: appRole,
+    }).eq("id", data.user.id);
   } catch (err) {
     console.error("Signup exception:", err);
     return { error: "Registration failed. Please try again." };
   }
 
   return { success: "Account created successfully! You can now log in." };
+}
+
+function mapRoleToAppRole(role: string) {
+  switch (role) {
+    case "coordinator": return "coordinator";
+    case "rescue_team": return "rescue_team";
+    case "ambulance_team": return "ambulance_team";
+    case "fire_response": return "fire_response";
+    default: return "civilian";
+  }
 }
 
 export async function signOut() {
