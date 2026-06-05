@@ -13,6 +13,12 @@ import {
   type SosAssignment,
 } from "@/lib/sos/actions";
 
+const RESOURCE_LABELS: Record<string, string> = {
+  rescue_team: "Personnel Count",
+  ambulance_team: "Ambulances",
+  fire_response: "Fire Trucks",
+};
+
 // ─── Priority computation ───────────────────────────────────────────
 
 type Priority = "critical" | "high" | "medium" | "low";
@@ -117,6 +123,7 @@ const AssignModal = ({
   const availableTeams = TEAM_OPTIONS.filter((t) => !existingTeams.includes(t.value));
   const [teamType, setTeamType] = useState(availableTeams[0]?.value ?? "");
   const [eta, setEta] = useState("");
+  const [resourceCount, setResourceCount] = useState("1");
 
   const assignMut = useMutation({
     mutationFn: () =>
@@ -124,6 +131,7 @@ const AssignModal = ({
         request.id,
         teamType,
         eta ? parseInt(eta) : undefined,
+        resourceCount ? parseInt(resourceCount) : 1,
       ),
     onSuccess: (res) => {
       if (res.success) {
@@ -159,6 +167,20 @@ const AssignModal = ({
                 Already assigned: {existingTeams.map((t) => TEAM_OPTIONS.find((o) => o.value === t)?.label || t).join(", ")}
               </p>
             )}
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-400">
+              {RESOURCE_LABELS[teamType] || "Resource Count"}
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={resourceCount}
+              onChange={(e) => setResourceCount(e.target.value)}
+              placeholder="e.g. 5"
+              className="w-full rounded-xl border border-slate-700 bg-slate-800/80 px-3 py-2 text-sm text-slate-200 outline-none focus:border-teal-600 placeholder-slate-500"
+            />
           </div>
 
           <div>
@@ -312,14 +334,17 @@ const DetailModal = ({
                   key={a.id}
                   className="flex items-center justify-between rounded-xl border border-slate-700/50 bg-slate-800/40 px-3 py-2"
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-slate-200">
-                      {TEAM_LABELS[a.assigned_team] || a.assigned_team}
-                    </span>
-                    {a.eta && (
-                      <span className="text-[10px] text-slate-500">ETA {a.eta}min</span>
-                    )}
-                  </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-slate-200">
+                        {TEAM_LABELS[a.assigned_team] || a.assigned_team}
+                      </span>
+                      {a.resource_count > 1 && (
+                        <span className="text-[10px] text-slate-500">{a.resource_count}x</span>
+                      )}
+                      {a.eta && (
+                        <span className="text-[10px] text-slate-500">ETA {a.eta}min</span>
+                      )}
+                    </div>
                   <span className="text-[10px] text-slate-500">
                     {new Date(a.dispatch_time).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                   </span>

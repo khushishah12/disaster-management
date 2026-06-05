@@ -6,8 +6,11 @@ import { createClient } from "@/lib/supabase/client";
 
 import {
   getMyTeamAssignments,
+  startTeamResponse,
+  updateAssignmentResource,
   updateSosRequestStatus,
   type SosRequestWithProfile,
+  type TeamAssignmentRow,
 } from "@/lib/sos/actions";
 
 const PRIORITY_ORDER: Record<string, number> = {
@@ -62,7 +65,7 @@ const SEVERITY_WEIGHT: Record<string, number> = {
   low: 0,
 };
 
-function computePriority(r: SosRequestWithProfile): string {
+function computePriority(r: SosRequestWithProfile | TeamAssignmentRow): string {
   const severity = r.severity || "low";
   const totalPeople =
     (r.adults_count || 0) +
@@ -81,8 +84,9 @@ function computePriority(r: SosRequestWithProfile): string {
 
 export const SosAssignmentsPanel = () => {
   const queryClient = useQueryClient();
-  const [selected, setSelected] = useState<SosRequestWithProfile | null>(null);
+  const [selected, setSelected] = useState<TeamAssignmentRow | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [resourceInputs, setResourceInputs] = useState<Record<string, string>>({});
 
   const { data, isLoading } = useQuery({
     queryKey: ["my-team-assignments"],
@@ -90,11 +94,11 @@ export const SosAssignmentsPanel = () => {
     refetchInterval: 15000,
   });
 
-  const assignments = data?.data ?? [];
+  const assignments = (data?.data ?? []) as TeamAssignmentRow[];
 
   const filtered = useMemo(() => {
     if (statusFilter === "all") return assignments;
-    return assignments.filter((r) => r.status === statusFilter);
+    return assignments.filter((r: TeamAssignmentRow) => r.status === statusFilter);
   }, [assignments, statusFilter]);
 
   const sorted = useMemo(
@@ -277,28 +281,78 @@ export const SosAssignmentsPanel = () => {
                     {r.status !== "closed" && r.status !== "cancelled" && (
                       <div className="flex flex-wrap gap-2 pt-1">
                         {r.status === "acknowledged" && (
-                          <button
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              await updateSosRequestStatus(r.id, "in_progress");
-                              queryClient.invalidateQueries({ queryKey: ["my-team-assignments"] });
-                            }}
-                            className="rounded-xl bg-orange-600 px-4 py-1.5 text-xs font-medium text-white transition hover:bg-orange-500"
-                          >
-                            Start Response
-                          </button>
+                          <>
+                            <div className="w-full">
+                              <label className="mb-1 block text-[10px] font-medium text-slate-500">
+                                Resources for this task
+                              </label>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={resourceInputs[r.id] ?? String((r as TeamAssignmentRow).rescue_assignments?.[0]?.resource_count ?? 1)}
+                                  onChange={(e) => setResourceInputs((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                                  placeholder="e.g. 5"
+                                  className="w-24 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-teal-600 placeholder-slate-500"
+                                />
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    const count = parseInt(resourceInputs[r.id] ?? "1");
+                                    if (count < 1) return;
+                                    const res = await updateAssignmentResource(r.id, count);
+                                    if (res.success) {
+                                      queryClient.invalidateQueries({ queryKey: ["my-team-assignments"] });
+                                    }
+                                  }}
+                                  className="rounded-lg border border-slate-700 bg-slate-800/60 px-2.5 py-1.5 text-[10px] text-slate-400 transition hover:border-slate-600"
+                                >
+                                  Update
+                                </button>
+                              </div>
+                            </div>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                const count = parseInt(resourceInputs[r.id] ?? String((r as TeamAssignmentRow).rescue_assignments?.[0]?.resource_count ?? 1));
+                                navigator.geolocation.getCurrentPosition(async (pos) => {
+                                  const res = await startTeamResponse(r.id, count, pos.coords.latitude, pos.coords.longitude);
+                                  if (res.success) {
+                                    queryClient.invalidateQueries({ queryKey: ["my-team-assignments"] });
+                                  }
+                                }, async () => {
+                                  const res = await startTeamResponse(r.id, count);
+                                  if (res.success) {
+                                    queryClient.invalidateQueries({ queryKey: ["my-team-assignments"] });
+                                  }
+                                });
+                              }}
+                              className="rounded-xl bg-orange-600 px-4 py-1.5 text-xs font-medium text-white transition hover:bg-orange-500"
+                            >
+                              Start Response
+                            </button>
+                          </>
                         )}
                         {r.status === "in_progress" && (
-                          <button
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              await updateSosRequestStatus(r.id, "rescued");
-                              queryClient.invalidateQueries({ queryKey: ["my-team-assignments"] });
-                            }}
-                            className="rounded-xl bg-emerald-600 px-4 py-1.5 text-xs font-medium text-white transition hover:bg-emerald-500"
-                          >
-                            Mark Rescued
-                          </button>
+                          <>
+                            {(r as TeamAssignmentRow).rescue_assignments?.[0]?.resource_count != null && (
+                              <div className="w-full text-[10px] text-slate-500">
+                                Resources deployed: {(r as TeamAssignmentRow).rescue_assignments[0].resource_count}
+                              </div>
+                            )}
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                const res = await updateSosRequestStatus(r.id, "rescued");
+                                if (res.success) {
+                                  queryClient.invalidateQueries({ queryKey: ["my-team-assignments"] });
+                                }
+                              }}
+                              className="rounded-xl bg-emerald-600 px-4 py-1.5 text-xs font-medium text-white transition hover:bg-emerald-500"
+                            >
+                              Mark Rescued
+                            </button>
+                          </>
                         )}
                       </div>
                     )}

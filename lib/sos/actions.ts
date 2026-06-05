@@ -575,6 +575,7 @@ export async function assignTeamToSosRequest(
   requestId: string,
   assignedTeam: string,
   eta?: number,
+  resourceCount?: number,
 ): Promise<{ success?: string; error?: string }> {
   const supabase = await createClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -599,6 +600,7 @@ export async function assignTeamToSosRequest(
     assigned_role: "rescuer",
     assigned_to: user.id,
     eta: eta ?? null,
+    resource_count: resourceCount ?? 1,
     dispatch_time: new Date().toISOString(),
   });
 
@@ -622,6 +624,7 @@ export type SosAssignment = {
   id: string;
   assigned_team: string;
   eta: number | null;
+  resource_count: number;
   dispatch_time: string;
   created_at: string;
 };
@@ -635,7 +638,7 @@ export async function getSosRequestAssignments(
 
   const { data, error } = await supabase
     .from("rescue_assignments")
-    .select("id, assigned_team, eta, dispatch_time, created_at")
+    .select("id, assigned_team, eta, resource_count, dispatch_time, created_at")
     .eq("request_id", requestId)
     .order("created_at", { ascending: true });
 
@@ -643,7 +646,11 @@ export async function getSosRequestAssignments(
   return { data: data as SosAssignment[], error: null };
 }
 
-export async function getMyTeamAssignments(): Promise<{ data: SosRequestWithProfile[]; error: string | null }> {
+export type TeamAssignmentRow = SosRequestWithProfile & {
+  rescue_assignments: { id: string; resource_count: number; responder_lat: number | null; responder_lng: number | null }[];
+};
+
+export async function getMyTeamAssignments(): Promise<{ data: TeamAssignmentRow[]; error: string | null }> {
   const supabase = await createClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) return { data: [], error: "Not authenticated." };
@@ -655,7 +662,7 @@ export async function getMyTeamAssignments(): Promise<{ data: SosRequestWithProf
 
   const { data, error } = await supabase
     .from("sos_requests")
-    .select("*, profiles(full_name, phone), rescue_assignments!inner(assigned_team)")
+    .select("*, profiles(full_name, phone), rescue_assignments!inner(id, resource_count, responder_lat, responder_lng)")
     .eq("rescue_assignments.assigned_team", profile.app_role)
     .in("status", ["acknowledged", "in_progress"])
     .order("created_at", { ascending: false });
@@ -666,10 +673,71 @@ export async function getMyTeamAssignments(): Promise<{ data: SosRequestWithProf
       .select("*, profiles(full_name, phone)")
       .in("status", ["acknowledged", "in_progress"])
       .order("created_at", { ascending: false });
-    return { data: (fallback ?? []) as SosRequestWithProfile[], error: null };
+    return { data: (fallback ?? []) as TeamAssignmentRow[], error: null };
   }
 
-  return { data: (data ?? []) as SosRequestWithProfile[], error: null };
+  return { data: (data ?? []) as TeamAssignmentRow[], error: null };
+}
+
+export async function startTeamResponse(
+  requestId: string,
+  resourceCount?: number,
+  responderLat?: number,
+  responderLng?: number,
+): Promise<{ success?: string; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) return { error: "Not authenticated." };
+
+  const { data: profile } = await supabase.from("profiles").select("app_role").eq("id", user.id).single();
+  if (!profile?.app_role || profile.app_role === "civilian" || profile.app_role === "coordinator") {
+    return { error: "Only response teams can start a response." };
+  }
+
+  const { data: assignment } = await supabase
+    .from("rescue_assignments")
+    .select("id")
+    .eq("request_id", requestId)
+    .eq("assigned_team", profile.app_role)
+    .maybeSingle();
+
+  if (!assignment) return { error: "No assignment found for your team on this request." };
+
+  const updateFields: Record<string, unknown> = {};
+  if (resourceCount != null) updateFields.resource_count = resourceCount;
+  if (responderLat != null) updateFields.responder_lat = responderLat;
+  if (responderLng != null) updateFields.responder_lng = responderLng;
+
+  if (Object.keys(updateFields).length > 0) {
+    await supabase.from("rescue_assignments").update(updateFields).eq("id", assignment.id);
+  }
+
+  const { error } = await supabase.from("sos_requests").update({ status: "in_progress" }).eq("id", requestId);
+  if (error) return { error: error.message };
+  return { success: "Response started." };
+}
+
+export async function updateAssignmentResource(
+  requestId: string,
+  resourceCount: number,
+): Promise<{ success?: string; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) return { error: "Not authenticated." };
+
+  const { data: profile } = await supabase.from("profiles").select("app_role").eq("id", user.id).single();
+  if (!profile?.app_role || profile.app_role === "civilian" || profile.app_role === "coordinator") {
+    return { error: "Only response teams can update resources." };
+  }
+
+  const { error } = await supabase
+    .from("rescue_assignments")
+    .update({ resource_count: resourceCount })
+    .eq("request_id", requestId)
+    .eq("assigned_team", profile.app_role);
+
+  if (error) return { error: error.message };
+  return { success: "Resource count updated." };
 }
 
 export async function updateSosRequestStatus(
@@ -681,11 +749,34 @@ export async function updateSosRequestStatus(
   if (authError || !user) return { error: "Not authenticated." };
 
   const { data: profile } = await supabase.from("profiles").select("app_role").eq("id", user.id).single();
-  if (profile?.app_role !== "coordinator") return { error: "Only coordinators can update status." };
+  if (!profile?.app_role) return { error: "Profile not found." };
 
-  const { error } = await supabase.from("sos_requests").update({ status }).eq("id", requestId);
-  if (error) return { error: error.message };
-  return { success: "Status updated." };
+  // Coordinators can update any status
+  if (profile.app_role === "coordinator") {
+    const { error } = await supabase.from("sos_requests").update({ status }).eq("id", requestId);
+    if (error) return { error: error.message };
+    return { success: "Status updated." };
+  }
+
+  // Team roles can only mark in_progress -> rescued on their own assignments
+  if (["rescue_team", "ambulance_team", "fire_response"].includes(profile.app_role)) {
+    if (status !== "rescued") return { error: "Teams can only mark requests as rescued." };
+
+    const { data: assignment } = await supabase
+      .from("rescue_assignments")
+      .select("id")
+      .eq("request_id", requestId)
+      .eq("assigned_team", profile.app_role)
+      .maybeSingle();
+
+    if (!assignment) return { error: "This request is not assigned to your team." };
+
+    const { error } = await supabase.from("sos_requests").update({ status }).eq("id", requestId);
+    if (error) return { error: error.message };
+    return { success: "Request marked as rescued." };
+  }
+
+  return { error: "You are not authorized to update status." };
 }
 
 export async function getAvailableResponders(): Promise<{ data: { id: string; full_name: string; app_role: string }[]; error: string | null }> {
@@ -698,6 +789,157 @@ export async function getAvailableResponders(): Promise<{ data: { id: string; fu
 
   if (error) return { data: [], error: error.message };
   return { data: data as { id: string; full_name: string; app_role: string }[], error: null };
+}
+
+// ─── Resource Allocation Stats ───────────────────────────────────
+
+export type ResourceAllocationStats = {
+  disaster_type: string;
+  total_assignments: number;
+  total_resources: number;
+  assigned_teams: { team: string; count: number; resources: number }[];
+};
+
+export async function getResourceAllocationByDisaster(): Promise<{
+  data: ResourceAllocationStats[];
+  error: string | null;
+}> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("sos_requests")
+    .select(`
+      emergency_type,
+      rescue_assignments (
+        assigned_team,
+        resource_count
+      )
+    `)
+    .in("status", ["acknowledged", "in_progress", "rescued"]);
+
+  if (error) return { data: [], error: error.message };
+
+  const map = new Map<string, Map<string, { count: number; resources: number }>>();
+
+  for (const row of data as { emergency_type: string; rescue_assignments: { assigned_team: string; resource_count: number }[] }[]) {
+    const type = row.emergency_type || "unknown";
+    if (!map.has(type)) map.set(type, new Map());
+    const teamMap = map.get(type)!;
+    const assignments = row.rescue_assignments ?? [];
+    for (const a of assignments) {
+      if (!teamMap.has(a.assigned_team)) {
+        teamMap.set(a.assigned_team, { count: 0, resources: 0 });
+      }
+      const entry = teamMap.get(a.assigned_team)!;
+      entry.count += 1;
+      entry.resources += a.resource_count ?? 1;
+    }
+  }
+
+  const result: ResourceAllocationStats[] = [];
+  for (const [disasterType, teamMap] of map) {
+    const teams = Array.from(teamMap.entries()).map(([team, stats]) => ({
+      team,
+      count: stats.count,
+      resources: stats.resources,
+    }));
+    const totalResources = teams.reduce((s, t) => s + t.resources, 0);
+    const totalAssignments = teams.reduce((s, t) => s + t.count, 0);
+    result.push({
+      disaster_type: disasterType,
+      total_assignments: totalAssignments,
+      total_resources: totalResources,
+      assigned_teams: teams,
+    });
+  }
+
+  return { data: result, error: null };
+}
+
+// ─── Active Responder Assignments (for dispatch viz) ─────────────
+
+export type ActiveResponderAssignment = {
+  assignment_id: string;
+  request_id: string;
+  sos_ticket: string;
+  emergency_type: string;
+  assigned_team: string;
+  resource_count: number;
+  responder_lat: number | null;
+  responder_lng: number | null;
+  incident_lat: number;
+  incident_lng: number;
+  incident_address: string | null;
+  status: string;
+  sos_created_at: string;
+};
+
+export async function getActiveResponderAssignments(): Promise<{
+  data: ActiveResponderAssignment[];
+  error: string | null;
+}> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("rescue_assignments")
+    .select(`
+      id,
+      request_id,
+      responder_lat,
+      responder_lng,
+      resource_count,
+      assigned_team,
+      sos_requests!inner(
+        ticket_number,
+        emergency_type,
+        latitude,
+        longitude,
+        address,
+        status,
+        created_at
+      )
+    `)
+    .in("sos_requests.status", ["in_progress"])
+    .not("responder_lat", "is", null)
+    .not("responder_lng", "is", null);
+
+  if (error) return { data: [], error: error.message };
+
+  const rows = data as unknown as {
+    id: string;
+    request_id: string;
+    responder_lat: number;
+    responder_lng: number;
+    resource_count: number;
+    assigned_team: string;
+    sos_requests: {
+      ticket_number: string;
+      emergency_type: string;
+      latitude: number;
+      longitude: number;
+      address: string | null;
+      status: string;
+      created_at: string;
+    };
+  }[];
+
+  const result: ActiveResponderAssignment[] = rows.map((r) => ({
+    assignment_id: r.id,
+    request_id: r.request_id,
+    sos_ticket: r.sos_requests.ticket_number,
+    emergency_type: r.sos_requests.emergency_type,
+    assigned_team: r.assigned_team,
+    resource_count: r.resource_count,
+    responder_lat: r.responder_lat,
+    responder_lng: r.responder_lng,
+    incident_lat: r.sos_requests.latitude,
+    incident_lng: r.sos_requests.longitude,
+    incident_address: r.sos_requests.address,
+    status: r.sos_requests.status,
+    sos_created_at: r.sos_requests.created_at,
+  }));
+
+  return { data: result, error: null };
 }
 
 export async function seedCityFacilities(

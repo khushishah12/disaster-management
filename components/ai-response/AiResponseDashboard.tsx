@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { DisasterSituationAnalysis } from "@/components/ai-response/DisasterSituationAnalysis";
 import { FacilitiesPanel } from "@/components/ai-response/FacilitiesPanel";
@@ -9,6 +9,8 @@ import { AIIntelligencePanel } from "@/components/ai-response/AIIntelligencePane
 import { DispatchPanel } from "@/components/ai-response/DispatchPanel";
 import { RecommendationPanel } from "@/components/ai-response/RecommendationPanel";
 import { ResourceAllocationPanel } from "@/components/ai-response/ResourceAllocationPanel";
+import { ResourceAllocationCards } from "@/components/ai-response/ResourceAllocationCards";
+import { LiveDispatchPanel } from "@/components/ai-response/LiveDispatchPanel";
 import { RoutePlannerPanel } from "@/components/ai-response/RoutePlannerPanel";
 import { WeatherPanel } from "@/components/ai-response/WeatherPanel";
 import { PanelCard, StatCard } from "@/components/ui/PanelCard";
@@ -57,6 +59,8 @@ type DisplayEvent = {
 };
 
 export function AiResponseDashboard() {
+  const [dispatchView, setDispatchView] = useState<"live" | "simulation">("live");
+
   const latitude = useDisasterStore((s) => s.situation.latitude);
   const longitude = useDisasterStore((s) => s.situation.longitude);
   const disasterType = useDisasterStore((s) => s.situation.disasterType);
@@ -297,16 +301,34 @@ export function AiResponseDashboard() {
             )}
           </PanelCard>
 
-          <PanelCard title="Resource Allocation">
-            <ResourceAllocationPanel inputs={{ disasterType, severity, populationAffected, weatherScore }} />
+          <PanelCard title="SOS Resource Allocation">
+            <ResourceAllocationCards />
           </PanelCard>
 
           <PanelCard title="AI Intelligence">
             <AIIntelligencePanel />
           </PanelCard>
 
-          <PanelCard title="Dispatch Simulation">
-            <DispatchPanel onMissionsChange={setDispatchMissions} />
+          <PanelCard title="Dispatch">
+            <div className="mb-3 flex gap-1 rounded-lg bg-slate-800/60 p-0.5">
+              <button
+                onClick={() => setDispatchView("live")}
+                className={`flex-1 rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider transition ${dispatchView === "live" ? "bg-teal-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+              >
+                Live
+              </button>
+              <button
+                onClick={() => setDispatchView("simulation")}
+                className={`flex-1 rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider transition ${dispatchView === "simulation" ? "bg-teal-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+              >
+                Simulate
+              </button>
+            </div>
+            {dispatchView === "live" ? (
+              <LiveDispatchPanel />
+            ) : (
+              <DispatchPanel onMissionsChange={setDispatchMissions} />
+            )}
           </PanelCard>
         </aside>
 
