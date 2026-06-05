@@ -7,6 +7,8 @@ import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { getMyRequests, getEmergencyProfile, getCityFacilities } from "@/lib/sos/actions";
 import { useRoute } from "@/lib/hooks/use-route";
+import { CivilianSosForm } from "@/components/dashboard/CivilianSosForm";
+import { CivilianRequestsView, CivilianRequestDetail } from "@/components/dashboard/CivilianRequestsView";
 import type { CityFacility } from "@/lib/sos/actions";
 
 const FacilityMiniMap = dynamic(
@@ -84,10 +86,13 @@ export function CivilianDashboard({ profile }: CivilianDashboardProps) {
     staleTime: 10 * 60 * 1000,
   });
 
+  const [view, setView] = useState<"dashboard" | "create" | "requests" | "detail">("dashboard");
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [selectedFacilityId, setSelectedFacilityId] = useState<string>("");
   const [userPosition, setUserPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [isLocating, setIsLocating] = useState(false);
+  const [sosTicket, setSosTicket] = useState<string | null>(null);
 
   const selectedFacility: CityFacility | undefined =
     facilities.find((f) => f.id === selectedFacilityId) ?? undefined;
@@ -129,19 +134,79 @@ export function CivilianDashboard({ profile }: CivilianDashboardProps) {
     setSelectedFacilityId("");
   };
 
+  if (view === "create") {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <button type="button" onClick={() => setView("dashboard")} className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6" /></svg>
+          </button>
+          <div>
+            <h2 className="text-base font-semibold text-slate-100">New Emergency Request</h2>
+            <p className="text-xs text-slate-500">Fill in the details to alert responders</p>
+          </div>
+        </div>
+        <CivilianSosForm
+          onSuccess={(ticket) => setSosTicket(ticket)}
+          onCancel={() => setView("dashboard")}
+        />
+        {sosTicket && (
+          <div className="rounded-xl border border-emerald-800/40 bg-emerald-900/10 p-6 text-center">
+            <div className="text-4xl mb-3">✅</div>
+            <h3 className="text-lg font-bold text-emerald-400">SOS Sent Successfully!</h3>
+            <p className="mt-1 text-sm text-slate-400">Help has been notified. Stay safe.</p>
+            <div className="mt-4 inline-block rounded-lg border border-emerald-800/40 bg-emerald-900/20 px-6 py-3">
+              <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Your Ticket Number</p>
+              <p className="text-xl font-mono font-bold text-emerald-300 tracking-tight mt-1">{sosTicket}</p>
+            </div>
+            <div className="mt-6 flex gap-3 justify-center">
+              <button type="button" onClick={() => { setView("dashboard"); setSosTicket(null); }}
+                className="px-6 py-2.5 rounded-xl border border-slate-600 text-slate-300 text-sm font-bold hover:bg-slate-800">
+                Back to Dashboard
+              </button>
+              <button type="button" onClick={() => { setView("requests"); setSosTicket(null); }}
+                className="px-6 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-bold hover:bg-teal-500">
+                Track My Request
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (view === "requests") {
+    return (
+      <CivilianRequestsView
+        onSelectRequest={(id) => { setSelectedRequestId(id); setView("detail"); }}
+        onBack={() => setView("dashboard")}
+      />
+    );
+  }
+
+  if (view === "detail" && selectedRequestId) {
+    return (
+      <CivilianRequestDetail
+        requestId={selectedRequestId}
+        onBack={() => setView("requests")}
+      />
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* Quick SOS CTA */}
-      <Link
-        href="/sos/create"
-        className="flex items-center justify-center gap-3 rounded-xl border-2 border-red-500/50 bg-red-500/10 px-6 py-5 transition-all hover:bg-red-500/20 hover:border-red-400"
+      <button
+        type="button"
+        onClick={() => setView("create")}
+        className="flex items-center justify-center gap-3 rounded-xl border-2 border-red-500/50 bg-red-500/10 px-6 py-5 transition-all hover:bg-red-500/20 hover:border-red-400 w-full"
       >
         <span className="text-2xl">🆘</span>
         <div>
           <p className="text-base font-bold text-red-400">Send Emergency SOS</p>
           <p className="text-xs text-red-400/70">Immediate help — one tap away</p>
         </div>
-      </Link>
+      </button>
 
       {/* Active SOS Status */}
       {activeRequest ? (
@@ -167,12 +232,13 @@ export function CivilianDashboard({ profile }: CivilianDashboardProps) {
             <span className="text-xs text-slate-600">·</span>
             <span className="text-xs text-slate-500 capitalize">{activeRequest.severity} severity</span>
           </div>
-          <Link
-            href={`/sos/my-requests/${activeRequest.id}`}
+          <button
+            type="button"
+            onClick={() => { setSelectedRequestId(activeRequest.id); setView("detail"); }}
             className="mt-3 inline-block text-xs font-medium text-teal-400 hover:text-teal-300"
           >
             View details →
-          </Link>
+          </button>
         </div>
       ) : (
         <div className="rounded-xl border border-slate-800/40 bg-slate-900/20 p-4 text-center">
@@ -186,17 +252,18 @@ export function CivilianDashboard({ profile }: CivilianDashboardProps) {
         <div className="rounded-xl border border-slate-800/60 bg-slate-900/40 p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Recent Requests</h3>
-            <Link href="/sos/my-requests" className="text-[10px] text-teal-400 hover:text-teal-300">View all →</Link>
+            <button type="button" onClick={() => setView("requests")} className="text-[10px] text-teal-400 hover:text-teal-300">View all →</button>
           </div>
           {recentRequests.length === 0 ? (
             <p className="text-xs text-slate-600">No requests yet</p>
           ) : (
             <div className="space-y-2">
               {recentRequests.map((req) => (
-                <Link
+                <button
                   key={req.id}
-                  href={`/sos/my-requests/${req.id}`}
-                  className="flex items-center justify-between rounded-lg bg-slate-800/40 px-3 py-2 transition hover:bg-slate-800/60"
+                  type="button"
+                  onClick={() => { setSelectedRequestId(req.id); setView("detail"); }}
+                  className="flex w-full items-center justify-between rounded-lg bg-slate-800/40 px-3 py-2 transition hover:bg-slate-800/60 text-left"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span>{EMERGENCY_ICONS[req.emergency_type] || "⚠️"}</span>
@@ -208,7 +275,7 @@ export function CivilianDashboard({ profile }: CivilianDashboardProps) {
                   <span className={cn("shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-semibold", STATUS_STYLES[req.status])}>
                     {req.status.replace(/_/g, " ")}
                   </span>
-                </Link>
+                </button>
               ))}
             </div>
           )}
@@ -217,12 +284,13 @@ export function CivilianDashboard({ profile }: CivilianDashboardProps) {
         <div className="rounded-xl border border-slate-800/60 bg-slate-900/40 p-4">
           <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Quick Actions</h3>
           <div className="space-y-2">
-            <Link
-              href="/sos/my-requests"
-              className="flex items-center gap-3 rounded-lg bg-slate-800/40 px-3 py-2.5 text-xs text-slate-300 transition hover:bg-slate-800/60"
+            <button
+              type="button"
+              onClick={() => setView("requests")}
+              className="flex w-full items-center gap-3 rounded-lg bg-slate-800/40 px-3 py-2.5 text-xs text-slate-300 transition hover:bg-slate-800/60 text-left"
             >
               <span>📋</span> My Requests
-            </Link>
+            </button>
             <Link
               href="/sos/nearby"
               className="flex items-center gap-3 rounded-lg bg-slate-800/40 px-3 py-2.5 text-xs text-slate-300 transition hover:bg-slate-800/60"
