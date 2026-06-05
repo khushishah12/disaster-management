@@ -377,6 +377,8 @@ export type CityFacility = {
   phone: string | null;
   operator: string | null;
   distance: number;
+  lat: number;
+  lng: number;
 };
 
 type OverpassEl = {
@@ -490,7 +492,7 @@ export async function getCityFacilities(
 
   const { data, error } = await supabase
     .from("city_facilities")
-    .select("id, name, type, phone, operator, distance_km")
+    .select("id, name, type, phone, operator, distance_km, latitude, longitude")
     .eq("city", city)
     .eq("state", state)
     .order("type")
@@ -510,6 +512,8 @@ export async function getCityFacilities(
         phone: f.phone,
         operator: f.operator,
         distance: f.distance_km ?? 0,
+        lat: f.latitude,
+        lng: f.longitude,
       })),
     };
   }
@@ -523,7 +527,7 @@ export async function getCityFacilities(
   // Read back from DB
   const { data: seeded } = await supabase
     .from("city_facilities")
-    .select("id, name, type, phone, operator, distance_km")
+    .select("id, name, type, phone, operator, distance_km, latitude, longitude")
     .eq("city", city)
     .eq("state", state)
     .order("type")
@@ -537,6 +541,8 @@ export async function getCityFacilities(
       phone: f.phone,
       operator: f.operator,
       distance: f.distance_km ?? 0,
+      lat: f.latitude,
+      lng: f.longitude,
     })),
   };
 }

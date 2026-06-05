@@ -3,10 +3,19 @@ export type RoutePoint = {
   lng: number;
 };
 
+export type RouteInstruction = {
+  text: string;
+  distance: number;
+  time: number;
+  sign: number;
+  street_name: string;
+};
+
 export type RouteLeg = {
   coordinates: RoutePoint[];
   distance: number;
   time: number;
+  instructions?: RouteInstruction[];
 };
 
 export const ROUTE_COLORS = [

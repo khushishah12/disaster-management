@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ActiveEventsPanel } from "@/components/dashboard/ActiveEventsPanel";
 import { AlertStatusBar } from "@/components/dashboard/AlertStatusBar";
 import { CategoryBreakdown } from "@/components/dashboard/CategoryBreakdown";
+import { CivilianDashboard } from "@/components/dashboard/CivilianDashboard";
 import { DataSourcesFooter } from "@/components/dashboard/DataSourcesFooter";
 import { OperatorProfile } from "@/components/dashboard/OperatorProfile";
 import { ResponseChecklist } from "@/components/dashboard/ResponseChecklist";
@@ -58,49 +59,75 @@ export default async function DashboardPage() {
       }
     : null;
 
+  const isCivilian = appRole === "civilian";
+
   return (
     <div className="dashboard-ops-bg min-h-screen">
       <SidebarLayout appRole={appRole}>
-        <AlertStatusBar
-          highestAlert={stats.highestAlert}
-          liveEventCount={stats.liveEventCount}
-          highAlertCount={stats.highAlertCount}
-          lastRefreshed={stats.lastRefreshed}
-        />
-
-        <StatCards
-          liveEventCount={stats.liveEventCount}
-          eonetCount={stats.eonetCount}
-          gdacsLiveCount={stats.gdacsLiveCount}
-          historicalCount={stats.historicalCount}
-          highAlertCount={stats.highAlertCount}
-          redAlertCount={stats.redAlertCount}
-        />
-
-        <div className="mt-6 grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <IndiaMapSection
-              eonetEvents={events.eonetEvents}
-              gdacsEvents={events.gdacsEvents}
-              historicalGdacsEvents={events.historicalGdacsEvents}
-              layout="embedded"
+        {isCivilian ? (
+          <div className="p-4 sm:p-6 lg:p-8">
+            <div className="mx-auto max-w-4xl">
+              <div className="mb-6">
+                <h1 className="text-lg font-semibold text-slate-100">
+                  Welcome{profile?.full_name ? `, ${profile.full_name}` : ""}
+                </h1>
+                <p className="mt-1 text-sm text-slate-500">
+                  Emergency dashboard — manage SOS requests and emergency info
+                </p>
+              </div>
+              <CivilianDashboard
+                profile={
+                  profile
+                    ? { full_name: profile.full_name, city: profile.city, state: profile.state, phone: profile.phone }
+                    : null
+                }
+              />
+            </div>
+          </div>
+        ) : (
+          <>
+            <AlertStatusBar
+              highestAlert={stats.highestAlert}
+              liveEventCount={stats.liveEventCount}
+              highAlertCount={stats.highAlertCount}
+              lastRefreshed={stats.lastRefreshed}
             />
-          </div>
 
-          <div className="flex flex-col gap-4">
-            <ActiveEventsPanel events={stats.liveEvents} />
-            <CategoryBreakdown items={stats.categoryBreakdown} />
-          </div>
-        </div>
+            <StatCards
+              liveEventCount={stats.liveEventCount}
+              eonetCount={stats.eonetCount}
+              gdacsLiveCount={stats.gdacsLiveCount}
+              historicalCount={stats.historicalCount}
+              highAlertCount={stats.highAlertCount}
+              redAlertCount={stats.redAlertCount}
+            />
 
-        <div className="mt-6 grid gap-4 lg:grid-cols-3">
-          <OperatorProfile profile={dashboardProfile} email={user.email ?? "—"} />
-          <div className="lg:col-span-2">
-            <ResponseChecklist />
-          </div>
-        </div>
+            <div className="mt-6 grid gap-6 lg:grid-cols-3">
+              <div className="lg:col-span-2">
+                <IndiaMapSection
+                  eonetEvents={events.eonetEvents}
+                  gdacsEvents={events.gdacsEvents}
+                  historicalGdacsEvents={events.historicalGdacsEvents}
+                  layout="embedded"
+                />
+              </div>
 
-        <DataSourcesFooter />
+              <div className="flex flex-col gap-4">
+                <ActiveEventsPanel events={stats.liveEvents} />
+                <CategoryBreakdown items={stats.categoryBreakdown} />
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-3">
+              <OperatorProfile profile={dashboardProfile} email={user.email ?? "—"} />
+              <div className="lg:col-span-2">
+                <ResponseChecklist />
+              </div>
+            </div>
+
+            <DataSourcesFooter />
+          </>
+        )}
       </SidebarLayout>
     </div>
   );

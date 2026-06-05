@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import type { RoutePoint, RouteLeg } from "@/lib/routing/types";
+import type { RoutePoint, RouteLeg, RouteInstruction } from "@/lib/routing/types";
 
 function generateMockRoutes(
   fromLat: number,
@@ -33,12 +33,21 @@ function generateMockRoutes(
   });
 }
 
+type GraphHopperInstruction = {
+  text: string;
+  distance: number;
+  time: number;
+  sign: number;
+  street_name: string;
+};
+
 type GraphHopperPath = {
   distance: number;
   time: number;
   points: {
     coordinates: [number, number][];
   };
+  instructions: GraphHopperInstruction[];
 };
 
 export const GET = async (req: Request) => {
@@ -65,21 +74,21 @@ export const GET = async (req: Request) => {
       return NextResponse.json({ routes });
     }
 
-    const params = new URLSearchParams({
-      key: apiKey,
-      point: [`${fromLat},${fromLng}`, `${toLat},${toLng}`].join("&point="),
-      vehicle: "car",
-      locale: "en",
-      instructions: "false",
-      points_encoded: "false",
-      calc_points: "true",
-      elevation: "false",
-      "alternative_route.max_paths": "2",
-      "alternative_route.max_weight_factor": "1.4",
-      "alternative_route.max_share_factor": "0.6",
-    });
+    const params = new URLSearchParams();
+    params.set("key", apiKey);
+    params.append("point", `${fromLat},${fromLng}`);
+    params.append("point", `${toLat},${toLng}`);
+    params.set("vehicle", "car");
+    params.set("locale", "en");
+    params.set("instructions", "true");
+    params.set("points_encoded", "false");
+    params.set("calc_points", "true");
+    params.set("elevation", "false");
+    params.set("alternative_route.max_paths", "2");
+    params.set("alternative_route.max_weight_factor", "1.4");
+    params.set("alternative_route.max_share_factor", "0.6");
 
-    const url = `https://graphhopper.com/api/1/route?${params.toString().replace(/%26point%3D/g, "&point=")}`;
+    const url = `https://graphhopper.com/api/1/route?${params.toString()}`;
 
     const res = await fetch(url, {
       headers: { "User-Agent": "DisasterMgmt/1.0" },
@@ -104,10 +113,18 @@ export const GET = async (req: Request) => {
       const coords = (path.points.coordinates ?? []).map(
         ([lng, lat]): RoutePoint => ({ lat, lng }),
       );
+      const instructions: RouteInstruction[] = (path.instructions ?? []).map((inst) => ({
+        text: inst.text,
+        distance: Math.round(inst.distance),
+        time: Math.round(inst.time / 1000),
+        sign: inst.sign,
+        street_name: inst.street_name,
+      }));
       return {
         coordinates: coords,
         distance: Math.round(path.distance),
         time: Math.round(path.time / 1000),
+        instructions,
       };
     }
 
