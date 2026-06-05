@@ -84,6 +84,7 @@ export function AIIntelligencePanel() {
   const severity = useDisasterStore((s) => s.situation.severity);
   const populationAffected = useDisasterStore((s) => s.situation.populationAffected);
   const disasterType = useDisasterStore((s) => s.situation.disasterType);
+  const description = useDisasterStore((s) => s.situation.description);
   const { data: weather } = useWeather(latitude, longitude);
   const { data: facilities } = useFacilities(latitude, longitude, 25000);
   const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -119,6 +120,7 @@ export function AIIntelligencePanel() {
         disasterType,
         severity,
         populationAffected,
+        description: description || null,
         weather,
         facilities,
       }),

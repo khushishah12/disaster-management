@@ -326,7 +326,6 @@ export function AiResponseDashboard() {
         <aside className="flex flex-col gap-4 lg:w-[30%]">
           {activeTab === "overview" && (
             <>
-              <DisasterSituationAnalysis />
               <PanelCard title="Live Events">
                 {allLoading ? (
                   <div className="space-y-2">
@@ -406,6 +405,7 @@ export function AiResponseDashboard() {
 
           {activeTab === "intel" && (
             <>
+              <DisasterSituationAnalysis />
               <PanelCard title="AI Intelligence">
                 <AIIntelligencePanel />
               </PanelCard>

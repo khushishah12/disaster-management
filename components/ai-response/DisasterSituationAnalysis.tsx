@@ -1,9 +1,28 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useDisasterStore } from "@/lib/store/disasterStore";
+import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 const DISASTER_TYPES = ["Flood", "Fire", "Earthquake", "Cyclone", "Landslide"] as const;
+
+const EMERGENCY_TO_DISASTER: Record<string, (typeof DISASTER_TYPES)[number]> = {
+  flood: "Flood",
+  fire: "Fire",
+  earthquake: "Earthquake",
+  cyclone: "Cyclone",
+  landslide: "Landslide",
+  structural_collapse: "Earthquake",
+  road_accident: "Fire",
+};
+
+const SEVERITY_MAP: Record<string, number> = {
+  minor: 2,
+  moderate: 4,
+  severe: 7,
+  critical: 9,
+};
 
 const SEVERITY_LABELS = [
   "Minimal", "Low", "Moderate", "Elevated", "Substantial",
@@ -15,9 +34,85 @@ const SEVERITY_COLORS = [
   "bg-orange-600", "bg-red-500", "bg-red-600", "bg-red-700", "bg-red-900",
 ];
 
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 export function DisasterSituationAnalysis() {
   const { situation, setDisasterType, setSeverity, setPopulationAffected, setDescription, reset } =
     useDisasterStore();
+  const [nearbyStats, setNearbyStats] = useState<{ type: string; count: number }[] | null>(null);
+  const [loadingStats, setLoadingStats] = useState(false);
+
+  // Auto-populate from nearest SOS when coordinates change
+  useEffect(() => {
+    if (situation.latitude == null || situation.longitude == null) return;
+    let cancelled = false;
+    async function fetchNearestSos() {
+      const supabase = await createClient();
+      const { data } = await supabase
+        .from("sos_requests")
+        .select("id, emergency_type, severity, adults_count, children_count, elderly_count, injured_count, latitude, longitude")
+        .in("status", ["pending", "acknowledged", "in_progress"]);
+      if (cancelled || !data || data.length === 0) return;
+      const lat = situation.latitude!;
+      const lng = situation.longitude!;
+      let nearest = data[0];
+      let minDist = Infinity;
+      for (const row of data) {
+        if (row.latitude == null || row.longitude == null) continue;
+        const d = haversineKm(lat, lng, row.latitude, row.longitude);
+        if (d < minDist) { minDist = d; nearest = row; }
+      }
+      if (minDist > 50 || cancelled) return; // only auto-populate if within 50km
+      const dType = EMERGENCY_TO_DISASTER[nearest.emergency_type];
+      if (dType && dType !== situation.disasterType) setDisasterType(dType);
+      const sev = SEVERITY_MAP[nearest.severity?.toLowerCase()] ?? situation.severity;
+      if (sev !== situation.severity) setSeverity(sev);
+      const pop = (nearest.adults_count ?? 0) + (nearest.children_count ?? 0) + (nearest.elderly_count ?? 0) + (nearest.injured_count ?? 0);
+      if (pop > 0 && pop !== situation.populationAffected) setPopulationAffected(pop);
+    }
+    fetchNearestSos();
+    return () => { cancelled = true; };
+  }, [situation.latitude, situation.longitude]);
+
+  // Fetch nearby SOS stats for live summary
+  useEffect(() => {
+    if (situation.latitude == null || situation.longitude == null) { setNearbyStats(null); return; }
+    let cancelled = false;
+    setLoadingStats(true);
+    async function fetchStats() {
+      const supabase = await createClient();
+      const { data } = await supabase
+        .from("sos_requests")
+        .select("emergency_type, latitude, longitude")
+        .in("status", ["pending", "acknowledged", "in_progress"]);
+      if (cancelled || !data) return;
+      const lat = situation.latitude!;
+      const lng = situation.longitude!;
+      const counts: Record<string, number> = {};
+      for (const row of data) {
+        if (row.latitude == null || row.longitude == null) continue;
+        const d = haversineKm(lat, lng, row.latitude, row.longitude);
+        if (d <= 25) { // within 25km
+          const t = row.emergency_type || "other";
+          counts[t] = (counts[t] ?? 0) + 1;
+        }
+      }
+      if (!cancelled) {
+        setNearbyStats(Object.entries(counts).map(([type, count]) => ({ type, count })));
+        setLoadingStats(false);
+      }
+    }
+    fetchStats();
+    return () => { cancelled = true; };
+  }, [situation.latitude, situation.longitude]);
 
   return (
     <div className="dashboard-panel rounded-xl border border-slate-800/60">
@@ -37,6 +132,22 @@ export function DisasterSituationAnalysis() {
       </div>
 
       <div className="space-y-4 p-4">
+        {/* Live nearby stats */}
+        {nearbyStats && nearbyStats.length > 0 && (
+          <div className="rounded-lg border border-teal-800/40 bg-teal-900/10 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-teal-400">
+              Nearby Active SOS ({nearbyStats.reduce((s, n) => s + n.count, 0)} within 25km)
+            </p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {nearbyStats.map((n) => (
+                <span key={n.type} className="rounded bg-slate-800/60 px-2 py-0.5 text-[10px] capitalize text-slate-300">
+                  {n.type.replace(/_/g, " ")}: {n.count}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div>
           <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.1em] text-slate-500">
             Disaster Type
