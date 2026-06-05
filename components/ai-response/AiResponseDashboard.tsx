@@ -384,15 +384,6 @@ export function AiResponseDashboard() {
               <PanelCard title="Weather">
                 <WeatherPanel />
               </PanelCard>
-              <PanelCard title="Route Planner">
-                <RoutePlannerPanel
-                  incidents={routeIncidents}
-                  routeData={routeData}
-                  onRouteClear={clearRoute}
-                  loading={routeLoading}
-                  onPlanRoute={(from, to) => setRouteParams({ fromLat: from.lat, fromLng: from.lng, toLat: to.lat, toLng: to.lng })}
-                />
-              </PanelCard>
             </>
           )}
 
@@ -409,7 +400,10 @@ export function AiResponseDashboard() {
         </aside>
 
         {/* Map - always visible */}
-        <section className="flex flex-col lg:w-[50%]">
+        <section className={cn(
+          "flex flex-col",
+          activeTab === "weather" ? "lg:w-[50%]" : "lg:flex-1",
+        )}>
           <div className="dashboard-panel relative flex-1 overflow-hidden rounded-xl border border-slate-800/60" style={{ minHeight: "300px" }}>
             <AiResponseMap
               routeData={routeData}
@@ -419,71 +413,19 @@ export function AiResponseDashboard() {
         </section>
 
         {/* Right panels - change by tab */}
-        <aside className="flex flex-col gap-4 lg:w-[20%]">
-          {activeTab === "overview" && (
-            <>
-              <PanelCard title="Weather Summary">
-                <WeatherPanel />
-              </PanelCard>
-              <PanelCard title="Route Planner">
-                <RoutePlannerPanel
-                  incidents={routeIncidents}
-                  routeData={routeData}
-                  onRouteClear={clearRoute}
-                  loading={routeLoading}
-                  onPlanRoute={(from, to) => setRouteParams({ fromLat: from.lat, fromLng: from.lng, toLat: to.lat, toLng: to.lng })}
-                />
-              </PanelCard>
-              <PanelCard title="Recommendations">
-                <RecommendationPanel recommendations={recommendations} loading={allLoading} />
-              </PanelCard>
-            </>
-          )}
-
-          {activeTab === "resources" && (
-            <>
-              <PanelCard title="Emergency Facilities">
-                <FacilitiesPanel hasLocation={hasFacilityLocation} />
-              </PanelCard>
-              <PanelCard title="AI Intelligence">
-                <AIIntelligencePanel />
-              </PanelCard>
-            </>
-          )}
-
-          {activeTab === "dispatch" && (
-            <>
-              <PanelCard title="Weather">
-                <WeatherPanel />
-              </PanelCard>
-              <PanelCard title="Recommendations">
-                <RecommendationPanel recommendations={recommendations} loading={allLoading} />
-              </PanelCard>
-            </>
-          )}
-
-          {activeTab === "weather" && (
-            <>
-              <PanelCard title="Emergency Facilities">
-                <FacilitiesPanel hasLocation={hasFacilityLocation} />
-              </PanelCard>
-              <PanelCard title="Recommendations">
-                <RecommendationPanel recommendations={recommendations} loading={allLoading} />
-              </PanelCard>
-            </>
-          )}
-
-          {activeTab === "intel" && (
-            <>
-              <PanelCard title="Resource Allocation">
-                <ResourceAllocationPanel inputs={{ disasterType, severity, populationAffected, weatherScore }} />
-              </PanelCard>
-              <PanelCard title="SOS Resource Cards">
-                <ResourceAllocationCards />
-              </PanelCard>
-            </>
-          )}
-        </aside>
+        {activeTab === "weather" && (
+          <aside className="flex w-full flex-col gap-4 lg:w-[20%]">
+            <PanelCard title="Route Planner">
+              <RoutePlannerPanel
+                incidents={routeIncidents}
+                routeData={routeData}
+                onRouteClear={clearRoute}
+                loading={routeLoading}
+                onPlanRoute={(from, to) => setRouteParams({ fromLat: from.lat, fromLng: from.lng, toLat: to.lat, toLng: to.lng })}
+              />
+            </PanelCard>
+          </aside>
+        )}
       </div>
     </div>
   );
