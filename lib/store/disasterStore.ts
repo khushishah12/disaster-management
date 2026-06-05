@@ -27,6 +27,7 @@ interface DisasterStore {
   setPopulationAffected: (value: number) => void;
   setDescription: (text: string) => void;
   setCoordinates: (lat: number, lng: number) => void;
+  clearCoordinates: () => void;
   reset: () => void;
 
   showSos: boolean;
@@ -67,6 +68,8 @@ export const useDisasterStore = create<DisasterStore>((set) => ({
     set((state) => ({ situation: { ...state.situation, description } })),
   setCoordinates: (latitude, longitude) =>
     set((state) => ({ situation: { ...state.situation, latitude, longitude } })),
+  clearCoordinates: () =>
+    set((state) => ({ situation: { ...state.situation, latitude: null, longitude: null } })),
   reset: () => set({ situation: { ...INITIAL } }),
 
   showSos: true,

@@ -130,10 +130,13 @@ export function AiResponseDashboard() {
   const allError = eonetError || usgsError || gdacsError || weatherError;
 
   const displayEvents: DisplayEvent[] = useMemo(() => {
+    const cutoff = Date.now() - 48 * 60 * 60 * 1000;
     const events: DisplayEvent[] = [];
     for (const f of eonetEvents.features) {
       const p = f.properties;
       if (!p) continue;
+      if (p.closed) continue;
+      if (p.date && new Date(p.date).getTime() < cutoff) continue;
       const catId = p.categories?.[0]?.id ?? "";
       events.push({
         id: p.id,
@@ -146,6 +149,7 @@ export function AiResponseDashboard() {
     for (const f of usgsEvents.features) {
       const p = f.properties;
       if (!p) continue;
+      if (p.time && Number(p.time) < cutoff) continue;
       events.push({
         id: p.code,
         type: `M ${p.mag?.toFixed(1) ?? "?"}`,
@@ -157,6 +161,7 @@ export function AiResponseDashboard() {
     for (const f of gdacsEvents.features) {
       const p = f.properties;
       if (!p) continue;
+      if (p.fromdate && new Date(p.fromdate).getTime() < cutoff) continue;
       events.push({
         id: String(p.eventid),
         type: p.eventtype ?? "—",
@@ -169,10 +174,22 @@ export function AiResponseDashboard() {
     return events.slice(0, 20);
   }, [eonetEvents, usgsEvents, gdacsEvents]);
 
-  const totalIncidents =
-    eonetEvents.features.length +
-    usgsEvents.features.length +
-    gdacsEvents.features.length;
+  const { data: sosStats } = useQuery({
+    queryKey: ["sos-dashboard-stats"],
+    queryFn: async () => {
+      const supabase = await createClient();
+      const [sosRes, assignRes] = await Promise.all([
+        supabase.from("sos_requests").select("id, severity", { count: "exact", head: false }).in("status", ["pending", "acknowledged", "in_progress"]),
+        supabase.from("rescue_assignments").select("id", { count: "exact", head: false }).eq("status", "in_progress"),
+      ]);
+      const activeIncidents = sosRes.count ?? 0;
+      const activeMissions = assignRes.count ?? 0;
+      const criticalCount = (sosRes.data ?? []).filter((r) => r.severity?.toLowerCase() === "critical").length;
+      const severeCount = (sosRes.data ?? []).filter((r) => r.severity?.toLowerCase() === "severe").length;
+      return { activeIncidents, activeMissions, criticalCount, severeCount };
+    },
+    refetchInterval: 30000,
+  });
 
   const { data: sosIncidents } = useQuery({
     queryKey: ["sos-route-incidents"],
@@ -271,17 +288,17 @@ export function AiResponseDashboard() {
           </span>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <StatCard label="Active Incidents" value={String(totalIncidents)} accent="text-red-400" />
-          <StatCard label="Active Missions" value={String(dispatchMissions.length || "0")} accent="text-teal-400" />
+          <StatCard label="Active Incidents" value={String(sosStats?.activeIncidents ?? "—")} accent="text-red-400" />
+          <StatCard label="Active Missions" value={String(sosStats?.activeMissions ?? "—")} accent="text-teal-400" />
           <StatCard
             label="Response Status"
-            value={totalIncidents > 10 ? "Critical" : "Stable"}
-            accent={totalIncidents > 10 ? "text-amber-400" : "text-emerald-400"}
+            value={(sosStats?.criticalCount ?? 0) > 0 ? "Critical" : (sosStats?.severeCount ?? 0) > 0 ? "High Alert" : "Stable"}
+            accent={(sosStats?.criticalCount ?? 0) > 0 ? "text-amber-400" : (sosStats?.severeCount ?? 0) > 0 ? "text-orange-400" : "text-emerald-400"}
           />
           <StatCard
             label="Emergency Level"
-            value={totalIncidents > 20 ? "Level 3" : totalIncidents > 10 ? "Level 2" : "Level 1"}
-            accent={totalIncidents > 20 ? "text-red-400" : totalIncidents > 10 ? "text-orange-400" : "text-teal-400"}
+            value={(sosStats?.activeIncidents ?? 0) > 15 ? "Level 3" : (sosStats?.activeIncidents ?? 0) > 5 ? "Level 2" : "Level 1"}
+            accent={(sosStats?.activeIncidents ?? 0) > 15 ? "text-red-400" : (sosStats?.activeIncidents ?? 0) > 5 ? "text-orange-400" : "text-teal-400"}
           />
         </div>
       </header>
@@ -341,8 +358,8 @@ export function AiResponseDashboard() {
 
           {activeTab === "resources" && (
             <>
-              <PanelCard title="Resource Allocation">
-                <ResourceAllocationPanel inputs={{ disasterType, severity, populationAffected, weatherScore }} />
+              <PanelCard title="Live Dispatch Allocation">
+                <ResourceAllocationPanel />
               </PanelCard>
               <PanelCard title="SOS Resource Cards">
                 <ResourceAllocationCards />
@@ -408,6 +425,9 @@ export function AiResponseDashboard() {
             <AiResponseMap
               routeData={routeData}
               dispatchMissions={dispatchMissions}
+              eonetEvents={eonetEvents}
+              usgsEvents={usgsEvents}
+              gdacsEvents={gdacsEvents}
             />
           </div>
         </section>

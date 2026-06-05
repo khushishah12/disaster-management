@@ -30,6 +30,19 @@ const EMERGENCY_ICONS: Record<string, string> = {
   other: "⚠️",
 };
 
+const SEVERITY_COLORS: Record<string, string> = {
+  critical: "bg-red-500",
+  severe: "bg-orange-500",
+  moderate: "bg-amber-500",
+  minor: "bg-blue-500",
+};
+
+const STATUS_STYLES: Record<string, string> = {
+  acknowledged: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+  in_progress: "bg-orange-500/15 text-orange-400 border-orange-500/30",
+  rescued: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+};
+
 type SosWithAssignments = {
   id: string;
   ticket_number: string;
@@ -47,6 +60,15 @@ type SosWithAssignments = {
     responder_lng: number | null;
   }[];
 };
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
 
 export function ResourceAllocationCards() {
   const { data, isLoading } = useQuery({
@@ -75,17 +97,6 @@ export function ResourceAllocationCards() {
     refetchInterval: 15000,
   });
 
-  const grouped = useMemo(() => {
-    if (!data) return {};
-    const map: Record<string, SosWithAssignments[]> = {};
-    for (const row of data) {
-      const type = row.emergency_type || "other";
-      if (!map[type]) map[type] = [];
-      map[type].push(row);
-    }
-    return map;
-  }, [data]);
-
   const totalResources = useMemo(() => {
     if (!data) return 0;
     return data.reduce((sum, row) => {
@@ -93,15 +104,18 @@ export function ResourceAllocationCards() {
     }, 0);
   }, [data]);
 
+  const totalDeployed = useMemo(() => {
+    if (!data) return 0;
+    return data.filter((r) => (r.rescue_assignments ?? []).some((a) => a.responder_lat != null)).length;
+  }, [data]);
+
   if (isLoading) {
     return (
-      <div className="space-y-3">
-        <div className="h-6 w-48 animate-pulse rounded bg-slate-800/60" />
-        <div className="grid gap-3 sm:grid-cols-2">
-          {Array.from({ length: 2 }).map((_, i) => (
-            <div key={i} className="h-32 animate-pulse rounded-xl bg-slate-900/60" />
-          ))}
-        </div>
+      <div className="space-y-2">
+        <div className="h-4 w-48 animate-pulse rounded bg-slate-800/60" />
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="h-24 animate-pulse rounded-xl bg-slate-900/60" />
+        ))}
       </div>
     );
   }
@@ -115,93 +129,99 @@ export function ResourceAllocationCards() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-3">
+      <div className="flex items-center justify-between rounded-lg bg-slate-900/40 px-3 py-2">
         <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-          Active SOS Requests
+          SOS Requests
         </span>
-        <span className="text-[10px] text-teal-400">
-          {totalResources} total resources allocated
-        </span>
+        <div className="flex items-center gap-3 text-[10px] text-slate-500">
+          <span>{totalResources} resources</span>
+          <span className="text-emerald-500">{totalDeployed} deployed</span>
+        </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="space-y-2">
         {data.map((req) => {
           const assignments = req.rescue_assignments ?? [];
           const totalReqResources = assignments.reduce((s, a) => s + (a.resource_count ?? 0), 0);
           const teamsDeployed = assignments.filter((a) => a.responder_lat != null).length;
+          const hasTeams = assignments.length > 0;
+          const severityColor = SEVERITY_COLORS[req.severity?.toLowerCase()] ?? "bg-slate-500";
 
           return (
             <div
               key={req.id}
-              className="rounded-xl border border-slate-800/60 bg-slate-900/40 p-4 transition hover:border-slate-700/60"
+              className="relative flex items-start gap-3 rounded-xl border border-slate-800/60 bg-slate-900/40 p-3 transition hover:border-slate-700/60"
             >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-lg">
-                    {EMERGENCY_ICONS[req.emergency_type] || "⚠️"}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-xs font-mono font-semibold text-slate-200 truncate">
+              {/* Severity accent bar */}
+              <div className={cn("mt-0.5 h-10 w-1 shrink-0 rounded-full", severityColor)} />
+
+              {/* Icon */}
+              <span className="mt-0.5 text-lg shrink-0">
+                {EMERGENCY_ICONS[req.emergency_type] || "⚠️"}
+              </span>
+
+              {/* Content */}
+              <div className="min-w-0 flex-1">
+                {/* Top row: ticket + status + time */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="truncate text-xs font-semibold text-slate-200">
                       {req.ticket_number}
-                    </p>
-                    <p className="text-[10px] text-slate-500 capitalize">
-                      {req.emergency_type.replace(/_/g, " ")}
-                      {req.severity ? ` · ${req.severity}` : ""}
-                    </p>
+                    </span>
+                    <span className="shrink-0 text-[9px] text-slate-600">
+                      {timeAgo(req.created_at)}
+                    </span>
                   </div>
+                  <span className={cn(
+                    "shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-medium",
+                    STATUS_STYLES[req.status] ?? "bg-slate-500/15 text-slate-400",
+                  )}>
+                    {req.status.replace(/_/g, " ")}
+                  </span>
                 </div>
-                <span
-                  className={cn(
-                    "shrink-0 rounded-full px-2 py-0.5 text-[9px] font-medium",
-                    req.status === "in_progress"
-                      ? "bg-orange-500/15 text-orange-400"
-                      : req.status === "rescued"
-                        ? "bg-emerald-500/15 text-emerald-400"
-                        : "bg-blue-500/15 text-blue-400",
-                  )}
-                >
-                  {req.status.replace(/_/g, " ")}
-                </span>
-              </div>
 
-              {req.address && (
-                <p className="mt-2 text-[10px] text-slate-500 truncate">{req.address}</p>
-              )}
+                {/* Type + address */}
+                <p className="mt-0.5 text-[10px] text-slate-500 capitalize">
+                  {req.emergency_type.replace(/_/g, " ")}
+                  {req.severity ? <span className="text-slate-600"> · {req.severity}</span> : ""}
+                </p>
+                {req.address && (
+                  <p className="mt-0.5 truncate text-[9px] text-slate-600">{req.address}</p>
+                )}
 
-              {assignments.length > 0 ? (
-                <div className="mt-3 space-y-1.5">
-                  {assignments.map((a, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center justify-between rounded-lg bg-slate-800/40 px-2.5 py-1.5"
-                    >
-                      <div className="flex items-center gap-1.5">
+                {/* Teams */}
+                {hasTeams && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {assignments.map((a, i) => (
+                      <div
+                        key={i}
+                        className={cn(
+                          "flex items-center gap-1 rounded-md px-2 py-1 text-[10px]",
+                          a.responder_lat != null
+                            ? "bg-emerald-900/20 text-emerald-400"
+                            : "bg-slate-800/60 text-slate-400",
+                        )}
+                      >
                         <span>{TEAM_ICONS[a.assigned_team] || "📋"}</span>
-                        <span className="text-xs text-slate-300">
-                          {TEAM_LABELS[a.assigned_team] || a.assigned_team}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-teal-400">
-                          {a.resource_count}x
-                        </span>
+                        <span>{TEAM_LABELS[a.assigned_team] || a.assigned_team}</span>
+                        <span className="font-semibold">{a.resource_count}x</span>
                         {a.responder_lat != null && (
-                          <span className="text-[9px] text-emerald-500">en route</span>
+                          <span className="text-[8px] text-emerald-500">●</span>
                         )}
                       </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-3 text-[10px] text-slate-600">No teams assigned yet.</p>
-              )}
-
-              <div className="mt-3 flex items-center justify-between border-t border-slate-800 pt-2 text-[10px] text-slate-500">
-                <span>{assignments.length} team(s) · {totalReqResources} resources</span>
-                {teamsDeployed > 0 && (
-                  <span className="text-emerald-500">{teamsDeployed} deployed</span>
+                    ))}
+                  </div>
                 )}
+
+                {/* Footer */}
+                <div className="mt-2 flex items-center gap-3 border-t border-slate-800/60 pt-1.5 text-[9px] text-slate-600">
+                  <span>{assignments.length} team{assignments.length !== 1 ? "s" : ""}</span>
+                  <span>{totalReqResources} resource{totalReqResources !== 1 ? "s" : ""}</span>
+                  {teamsDeployed > 0 && (
+                    <span className="text-emerald-500">{teamsDeployed} en route</span>
+                  )}
+                </div>
               </div>
             </div>
           );
