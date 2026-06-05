@@ -3,6 +3,8 @@
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 
+import { useQuery } from "@tanstack/react-query";
+import { createClient } from "@/lib/supabase/client";
 import { DisasterSituationAnalysis } from "@/components/ai-response/DisasterSituationAnalysis";
 import { FacilitiesPanel } from "@/components/ai-response/FacilitiesPanel";
 import { AIIntelligencePanel } from "@/components/ai-response/AIIntelligencePanel";
@@ -172,28 +174,31 @@ export function AiResponseDashboard() {
     usgsEvents.features.length +
     gdacsEvents.features.length;
 
+  const { data: sosIncidents } = useQuery({
+    queryKey: ["sos-route-incidents"],
+    queryFn: async () => {
+      const supabase = await createClient();
+      const { data } = await supabase
+        .from("sos_requests")
+        .select("id, ticket_number, emergency_type, address, latitude, longitude, status")
+        .in("status", ["pending", "acknowledged", "in_progress"])
+        .not("latitude", "is", null)
+        .not("longitude", "is", null)
+        .order("created_at", { ascending: false });
+      return (data ?? []) as { id: string; ticket_number: string; emergency_type: string; address: string | null; latitude: number; longitude: number; status: string }[];
+    },
+    refetchInterval: 15000,
+  });
+
   const routeIncidents: RouteIncidentOption[] = useMemo(() => {
-    const opts: RouteIncidentOption[] = [];
-    for (const f of eonetEvents.features) {
-      const p = f.properties;
-      const g = f.geometry;
-      if (!p || !g) continue;
-      opts.push({ id: `eonet-${p.id}`, label: p.title, lat: g.coordinates[1], lng: g.coordinates[0] });
-    }
-    for (const f of usgsEvents.features) {
-      const p = f.properties;
-      const g = f.geometry;
-      if (!p || !g) continue;
-      opts.push({ id: `usgs-${p.code}`, label: p.place ?? "Earthquake", lat: g.coordinates[1], lng: g.coordinates[0] });
-    }
-    for (const f of gdacsEvents.features) {
-      const p = f.properties;
-      const g = f.geometry;
-      if (!p || !g) continue;
-      opts.push({ id: `gdacs-${p.eventid}`, label: p.eventname ?? p.name ?? "GDACS Event", lat: g.coordinates[1], lng: g.coordinates[0] });
-    }
-    return opts.slice(0, 50);
-  }, [eonetEvents, usgsEvents, gdacsEvents]);
+    if (!sosIncidents) return [];
+    return sosIncidents.map((s) => ({
+      id: s.id,
+      label: `${s.ticket_number} — ${s.emergency_type.replace(/_/g, " ")}${s.address ? ` (${s.address})` : ""}`,
+      lat: s.latitude,
+      lng: s.longitude,
+    }));
+  }, [sosIncidents]);
 
   const weatherScore = useMemo(
     () => (weather?.cities?.length ? computeWeatherImpactScore(weather.cities).score : 0),

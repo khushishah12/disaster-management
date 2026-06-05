@@ -25,18 +25,25 @@ export function RoutePlannerPanel({
   loading,
   onPlanRoute,
 }: RoutePlannerPanelProps) {
-  const latitude = useDisasterStore((s) => s.situation.latitude);
-  const longitude = useDisasterStore((s) => s.situation.longitude);
   const severity = useDisasterStore((s) => s.situation.severity);
-  const { data: weather } = useWeather(latitude, longitude);
-  const { data: facilities } = useFacilities(latitude, longitude, 25000);
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string>("");
+  const [selectedFacilityId, setSelectedFacilityId] = useState<string>("");
+  const [showSuccess, setShowSuccess] = useState(false);
+
+  const selectedIncident = useMemo(
+    () => incidents.find((i) => i.id === selectedIncidentId) ?? null,
+    [incidents, selectedIncidentId],
+  );
+
+  const facilityLat = selectedIncident?.lat ?? null;
+  const facilityLng = selectedIncident?.lng ?? null;
+
+  const { data: weather } = useWeather(facilityLat, facilityLng);
+  const { data: facilities } = useFacilities(facilityLat, facilityLng, 25000);
   const weatherScore = useMemo(
     () => (weather?.cities?.length ? computeWeatherImpactScore(weather.cities).score : 0),
     [weather],
   );
-  const [selectedIncidentId, setSelectedIncidentId] = useState<string>("");
-  const [selectedFacilityId, setSelectedFacilityId] = useState<string>("");
-  const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
     if (routeData) {
@@ -45,6 +52,16 @@ export function RoutePlannerPanel({
       return () => clearTimeout(t);
     }
   }, [routeData]);
+
+  const fireStations = useMemo(
+    () => (facilities?.facilities ?? []).filter((f) => f.type === "fire_station"),
+    [facilities],
+  );
+
+  const policeStations = useMemo(
+    () => (facilities?.facilities ?? []).filter((f) => f.type === "police"),
+    [facilities],
+  );
 
   const hospitals = useMemo(
     () => (facilities?.facilities ?? []).filter((f) => f.type === "hospital"),
@@ -58,15 +75,9 @@ export function RoutePlannerPanel({
 
   const destOptions = useMemo(() => {
     const map = new Map<string, Facility>();
-    for (const h of hospitals) map.set(h.id, h);
-    for (const s of shelters) map.set(s.id, s);
+    for (const f of facilities?.facilities ?? []) map.set(f.id, f);
     return Array.from(map.values());
-  }, [hospitals, shelters]);
-
-  const selectedIncident = useMemo(
-    () => incidents.find((i) => i.id === selectedIncidentId) ?? null,
-    [incidents, selectedIncidentId],
-  );
+  }, [facilities]);
 
   const selectedDest = useMemo(
     () => destOptions.find((f) => f.id === selectedFacilityId) ?? null,
@@ -136,6 +147,24 @@ export function RoutePlannerPanel({
                 {hospitals.map((h) => (
                   <option key={h.id} value={h.id}>
                     {h.name} ({h.distance} km)
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {fireStations.length > 0 && (
+              <optgroup label="Fire Stations">
+                {fireStations.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name} ({f.distance} km)
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {policeStations.length > 0 && (
+              <optgroup label="Police Stations">
+                {policeStations.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.distance} km)
                   </option>
                 ))}
               </optgroup>
