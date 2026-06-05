@@ -3,7 +3,12 @@ import { redirect } from "next/navigation";
 import { ActiveEventsPanel } from "@/components/dashboard/ActiveEventsPanel";
 import { AlertStatusBar } from "@/components/dashboard/AlertStatusBar";
 import { CategoryBreakdown } from "@/components/dashboard/CategoryBreakdown";
+import { AmbulanceDashboard } from "@/components/dashboard/AmbulanceDashboard";
 import { CivilianDashboard } from "@/components/dashboard/CivilianDashboard";
+import { RescueTeamDashboard } from "@/components/dashboard/RescueTeamDashboard";
+import { FireResponseDashboard } from "@/components/dashboard/FireResponseDashboard";
+import { HospitalCoordinatorDashboard } from "@/components/dashboard/HospitalCoordinatorDashboard";
+import { ShelterManagementDashboard } from "@/components/dashboard/ShelterManagementDashboard";
 import { DataSourcesFooter } from "@/components/dashboard/DataSourcesFooter";
 import { OperatorProfile } from "@/components/dashboard/OperatorProfile";
 import { ResponseChecklist } from "@/components/dashboard/ResponseChecklist";
@@ -60,6 +65,15 @@ export default async function DashboardPage() {
     : null;
 
   const isCivilian = appRole === "civilian";
+  const isAmbulanceTeam = appRole === "ambulance_team";
+  const isRescueTeam = appRole === "rescue_team";
+  const isFireResponse = appRole === "fire_response";
+  const isHospitalCoordinator = appRole === "hospital_coordinator";
+  const isShelterDepartment = appRole === "shelter_department";
+
+  const profileData = profile
+    ? { full_name: profile.full_name, city: profile.city, state: profile.state, phone: profile.phone }
+    : null;
 
   return (
     <div className="dashboard-ops-bg min-h-screen">
@@ -67,21 +81,37 @@ export default async function DashboardPage() {
         {isCivilian ? (
           <div className="p-4 sm:p-6 lg:p-8">
             <div className="mx-auto max-w-4xl">
-              <div className="mb-6">
-                <h1 className="text-lg font-semibold text-slate-100">
-                  Welcome{profile?.full_name ? `, ${profile.full_name}` : ""}
-                </h1>
-                <p className="mt-1 text-sm text-slate-500">
-                  Emergency dashboard — manage SOS requests and emergency info
-                </p>
-              </div>
-              <CivilianDashboard
-                profile={
-                  profile
-                    ? { full_name: profile.full_name, city: profile.city, state: profile.state, phone: profile.phone }
-                    : null
-                }
-              />
+              <CivilianDashboard profile={profileData} />
+            </div>
+          </div>
+        ) : isAmbulanceTeam ? (
+          <div className="p-4 sm:p-6 lg:p-8">
+            <div className="mx-auto max-w-4xl">
+              <AmbulanceDashboard profile={profileData} />
+            </div>
+          </div>
+        ) : isRescueTeam ? (
+          <div className="p-4 sm:p-6 lg:p-8">
+            <div className="mx-auto max-w-4xl">
+              <RescueTeamDashboard profile={profileData} />
+            </div>
+          </div>
+        ) : isFireResponse ? (
+          <div className="p-4 sm:p-6 lg:p-8">
+            <div className="mx-auto max-w-4xl">
+              <FireResponseDashboard profile={profileData} />
+            </div>
+          </div>
+        ) : isHospitalCoordinator ? (
+          <div className="p-4 sm:p-6 lg:p-8">
+            <div className="mx-auto max-w-4xl">
+              <HospitalCoordinatorDashboard profile={profileData} />
+            </div>
+          </div>
+        ) : isShelterDepartment ? (
+          <div className="p-4 sm:p-6 lg:p-8">
+            <div className="mx-auto max-w-4xl">
+              <ShelterManagementDashboard profile={profileData} />
             </div>
           </div>
         ) : (
