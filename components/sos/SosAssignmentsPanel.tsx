@@ -84,7 +84,7 @@ function computePriority(r: SosRequestWithProfile | TeamAssignmentRow): string {
 
 export const SosAssignmentsPanel = () => {
   const queryClient = useQueryClient();
-  const [selected, setSelected] = useState<TeamAssignmentRow | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [resourceInputs, setResourceInputs] = useState<Record<string, string>>({});
 
@@ -198,7 +198,7 @@ export const SosAssignmentsPanel = () => {
             return (
               <div
                 key={r.id}
-                onClick={() => setSelected(selected?.id === r.id ? null : r)}
+                onClick={() => setSelectedId(selectedId === r.id ? null : r.id)}
                 className="cursor-pointer rounded-2xl border border-slate-700/40 bg-slate-900/60 p-4 backdrop-blur-sm transition hover:border-slate-600/60"
               >
                 <div className="flex items-start justify-between gap-2">
@@ -234,7 +234,7 @@ export const SosAssignmentsPanel = () => {
                   <span>{new Date(r.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
                 </div>
 
-                {selected?.id === r.id && (
+                {selectedId === r.id && (
                   <div className="mt-4 border-t border-slate-800 pt-4 space-y-3">
                     <div className="grid gap-3 sm:grid-cols-2 text-xs">
                       <div>
@@ -300,10 +300,7 @@ export const SosAssignmentsPanel = () => {
                                     e.stopPropagation();
                                     const count = parseInt(resourceInputs[r.id] ?? "1");
                                     if (count < 1) return;
-                                    const res = await updateAssignmentResource(r.id, count);
-                                    if (res.success) {
-                                      queryClient.invalidateQueries({ queryKey: ["my-team-assignments"] });
-                                    }
+                                    await updateAssignmentResource(r.id, count);
                                   }}
                                   className="rounded-lg border border-slate-700 bg-slate-800/60 px-2.5 py-1.5 text-[10px] text-slate-400 transition hover:border-slate-600"
                                 >

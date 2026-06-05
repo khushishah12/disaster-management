@@ -29,15 +29,11 @@ interface DisasterStore {
   setCoordinates: (lat: number, lng: number) => void;
   reset: () => void;
 
-  showEonet: boolean;
-  showGdacs: boolean;
-  showUsgs: boolean;
+  showSos: boolean;
   showRadar: boolean;
   showFacilities: boolean;
   facilityRadius: number;
-  toggleEonet: () => void;
-  toggleGdacs: () => void;
-  toggleUsgs: () => void;
+  toggleSos: () => void;
   toggleRadar: () => void;
   toggleFacilities: () => void;
   setFacilityRadius: (r: number) => void;
@@ -73,15 +69,11 @@ export const useDisasterStore = create<DisasterStore>((set) => ({
     set((state) => ({ situation: { ...state.situation, latitude, longitude } })),
   reset: () => set({ situation: { ...INITIAL } }),
 
-  showEonet: true,
-  showGdacs: true,
-  showUsgs: true,
+  showSos: true,
   showRadar: false,
   showFacilities: true,
   facilityRadius: 25000,
-  toggleEonet: () => set((s) => ({ showEonet: !s.showEonet })),
-  toggleGdacs: () => set((s) => ({ showGdacs: !s.showGdacs })),
-  toggleUsgs: () => set((s) => ({ showUsgs: !s.showUsgs })),
+  toggleSos: () => set((s) => ({ showSos: !s.showSos })),
   toggleRadar: () => set((s) => ({ showRadar: !s.showRadar })),
   toggleFacilities: () => set((s) => ({ showFacilities: !s.showFacilities })),
   setFacilityRadius: (facilityRadius) => set({ facilityRadius }),

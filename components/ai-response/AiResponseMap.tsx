@@ -6,20 +6,12 @@ import L from "leaflet";
 import { useEffect, useState } from "react";
 import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import { useDisasterStore } from "@/lib/store/disasterStore";
-import { normalizeEonetEvents } from "@/lib/map/eonet";
-import { normalizeGdacsEvents } from "@/lib/map/gdacs";
-import { normalizeUsgsEvents } from "@/lib/map/usgs";
-import { EonetEventsLayer } from "@/components/EonetEventsLayer";
-import { GdacsEventsLayer } from "@/components/GdacsEventsLayer";
-import { UsgsEarthquakeLayer } from "@/components/ai-response/UsgsEarthquakeLayer";
 import { FacilitiesLayer } from "@/components/ai-response/FacilitiesLayer";
 import { DispatchLayer } from "@/components/ai-response/DispatchLayer";
 import { RouteLayer } from "@/components/ai-response/RouteLayer";
+import { SosMapLayer } from "@/components/ai-response/SosMapLayer";
 import type { DispatchMission } from "@/lib/dispatch/types";
 import type { RouteData } from "@/lib/routing/types";
-import { useEonetEvents } from "@/lib/hooks/use-eonet";
-import { useUsgsEvents } from "@/lib/hooks/use-usgs";
-import { useGdacsEvents } from "@/lib/hooks/use-gdacs";
 import { useFacilities } from "@/lib/hooks/use-facilities";
 import { INDIA_BOUNDS, INDIA_CENTER, INDIA_DEFAULT_ZOOM } from "@/lib/map/india-bounds";
 
@@ -107,7 +99,7 @@ function LayerToggle({ label, active, color, onToggle }: LayerToggleProps) {
       <span className="text-xs font-medium text-slate-300">{label}</span>
       <input
         type="checkbox"
-        checked={active}
+        checked={active ?? false}
         onChange={onToggle}
         className="ml-auto h-3.5 w-3.5 accent-teal-500"
       />
@@ -123,22 +115,15 @@ type AiResponseMapProps = {
 export function AiResponseMap({ routeData, dispatchMissions }: AiResponseMapProps) {
   const latitude = useDisasterStore((s) => s.situation.latitude);
   const longitude = useDisasterStore((s) => s.situation.longitude);
-  const showEonet = useDisasterStore((s) => s.showEonet);
-  const showGdacs = useDisasterStore((s) => s.showGdacs);
-  const showUsgs = useDisasterStore((s) => s.showUsgs);
+  const showSos = useDisasterStore((s) => s.showSos);
   const showRadar = useDisasterStore((s) => s.showRadar);
   const showFacilities = useDisasterStore((s) => s.showFacilities);
+  const toggleSos = useDisasterStore((s) => s.toggleSos);
+  const toggleRadar = useDisasterStore((s) => s.toggleRadar);
+  const toggleFacilities = useDisasterStore((s) => s.toggleFacilities);
 
-  const { data: eonetEvents } = useEonetEvents();
-  const { data: usgsEvents } = useUsgsEvents();
-  const { data: gdacsEvents } = useGdacsEvents();
   const facilityRadius = useDisasterStore((s) => s.facilityRadius);
   const { data: facilitiesData } = useFacilities(latitude, longitude, facilityRadius);
-
-  const eonet = normalizeEonetEvents(eonetEvents ?? null);
-  const gdacs = normalizeGdacsEvents(gdacsEvents ?? null);
-  const usgs = normalizeUsgsEvents(usgsEvents ?? null);
-  const hasLiveData = eonet.features.length > 0 || gdacs.features.length > 0 || usgs.features.length > 0;
 
   return (
     <div className="relative h-full w-full">
@@ -156,21 +141,12 @@ export function AiResponseMap({ routeData, dispatchMissions }: AiResponseMapProp
           attribution='&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>'
         />
         <MapClickHandler />
-        {!hasLiveData && <MapBoundsFitter />}
+        <MapBoundsFitter />
         <RadarLayer active={showRadar} />
+        <SosMapLayer visible={showSos} />
         <FacilitiesLayer data={facilitiesData ?? null} visible={showFacilities} />
         <RouteLayer data={routeData} visible={true} />
         <DispatchLayer missions={dispatchMissions} visible={true} />
-        {showEonet && <EonetEventsLayer events={eonet} />}
-        {showGdacs && (
-          <GdacsEventsLayer
-            events={gdacs}
-            activeEventId={null}
-            polygonEventIds={new Set()}
-            onPolygonSelect={() => {}}
-          />
-        )}
-        {showUsgs && <UsgsEarthquakeLayer events={usgs} />}
         {latitude != null && longitude != null && (
           <Marker position={[latitude, longitude]} icon={PLACED_ICON}>
             <Popup>
@@ -192,34 +168,22 @@ export function AiResponseMap({ routeData, dispatchMissions }: AiResponseMapProp
         </p>
         <div className="space-y-1.5">
           <LayerToggle
-            label="EONET Events"
-            active={showEonet}
-            color="#7c3aed"
-            onToggle={useDisasterStore((s) => s.toggleEonet)}
-          />
-          <LayerToggle
-            label="GDACS Events"
-            active={showGdacs}
-            color="#d97706"
-            onToggle={useDisasterStore((s) => s.toggleGdacs)}
-          />
-          <LayerToggle
-            label="USGS Earthquakes"
-            active={showUsgs}
-            color="#dc2626"
-            onToggle={useDisasterStore((s) => s.toggleUsgs)}
+            label="SOS Requests"
+            active={showSos}
+            color="#ef4444"
+            onToggle={toggleSos}
           />
           <LayerToggle
             label="RainViewer Radar"
             active={showRadar}
             color="#06b6d4"
-            onToggle={useDisasterStore((s) => s.toggleRadar)}
+            onToggle={toggleRadar}
           />
           <LayerToggle
             label="Emergency Facilities"
             active={showFacilities}
             color="#f59e0b"
-            onToggle={useDisasterStore((s) => s.toggleFacilities)}
+            onToggle={toggleFacilities}
           />
         </div>
       </div>
@@ -229,88 +193,18 @@ export function AiResponseMap({ routeData, dispatchMissions }: AiResponseMapProp
           Legend
         </p>
         <div className="space-y-1.5">
-          {showEonet && (
-            <>
-              <p className="text-[9px] font-medium uppercase tracking-wider text-purple-400/70">
-                EONET Events
-              </p>
-              {[
-                { label: "Wildfires", color: "#ea580c", border: "#9a3412" },
-                { label: "Severe Storms", color: "#7c3aed", border: "#5b21b6" },
-                { label: "Floods", color: "#2563eb", border: "#1e40af" },
-                { label: "Landslides", color: "#a16207", border: "#713f12" },
-                { label: "Earthquakes", color: "#e11d48", border: "#9f1239" },
-              ].map(({ label, color, border }) => (
-                <div key={label} className="flex items-center gap-1.5">
-                  <span
-                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-full border"
-                    style={{ backgroundColor: color, borderColor: border }}
-                  />
-                  <span className="text-[11px] text-slate-400">{label}</span>
-                </div>
-              ))}
-            </>
-          )}
-          {showGdacs && (
-            <>
-              {(showEonet || showUsgs) && <div className="my-1.5 border-t border-slate-800" />}
-              <p className="text-[9px] font-medium uppercase tracking-wider text-amber-400/70">
-                GDACS Events
-              </p>
-              {[
-                { label: "Tropical Cyclone", color: "#7c3aed", border: "#5b21b6" },
-                { label: "Flood", color: "#2563eb", border: "#1e40af" },
-                { label: "Earthquake", color: "#e11d48", border: "#9f1239" },
-                { label: "Wildfire", color: "#ea580c", border: "#9a3412" },
-                { label: "Volcano", color: "#7f1d1d", border: "#450a0a" },
-                { label: "Tsunami", color: "#0e7490", border: "#164e63" },
-                { label: "Drought", color: "#a16207", border: "#713f12" },
-              ].map(({ label, color, border }) => (
-                <div key={label} className="flex items-center gap-1.5">
-                  <span
-                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-full border"
-                    style={{ backgroundColor: color, borderColor: border }}
-                  />
-                  <span className="text-[11px] text-slate-400">{label}</span>
-                </div>
-              ))}
-            </>
-          )}
-          {showUsgs && (
-            <>
-              {(showEonet || showGdacs) && <div className="my-1.5 border-t border-slate-800" />}
-              <p className="text-[9px] font-medium uppercase tracking-wider text-red-400/70">
-                USGS Earthquakes
-              </p>
-              {[
-                { label: "M 8+", color: "#7f1d1d" },
-                { label: "M 6–7.9", color: "#dc2626" },
-                { label: "M 5–5.9", color: "#ea580c" },
-                { label: "M 4–4.9", color: "#d97706" },
-                { label: "M 3–3.9", color: "#a16207" },
-                { label: "M <3", color: "#57534e" },
-              ].map(({ label, color }) => (
-                <div key={label} className="flex items-center gap-1.5">
-                  <span
-                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-full border border-white/30"
-                    style={{ backgroundColor: color }}
-                  />
-                  <span className="text-[11px] text-slate-400">{label}</span>
-                </div>
-              ))}
-            </>
-          )}
+          <div className="flex items-center gap-1.5">
+            <span
+              className="inline-block h-3 w-3 shrink-0 rounded-full border-2 border-white"
+              style={{ backgroundColor: "#ef4444" }}
+            />
+            <span className="text-[11px] text-slate-400">SOS Requests</span>
+          </div>
           {showRadar && (
-            <>
-              {(showEonet || showGdacs || showUsgs) && <div className="my-1.5 border-t border-slate-800" />}
-              <p className="text-[9px] font-medium uppercase tracking-wider text-cyan-400/70">
-                Radar
-              </p>
-              <div className="flex items-center gap-1.5">
-                <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm border border-cyan-500/50 bg-cyan-500/20" />
-                <span className="text-[11px] text-slate-400">Precipitation</span>
-              </div>
-            </>
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm border border-cyan-500/50 bg-cyan-500/20" />
+              <span className="text-[11px] text-slate-400">Precipitation</span>
+            </div>
           )}
           {showFacilities && (
             <>
@@ -334,7 +228,7 @@ export function AiResponseMap({ routeData, dispatchMissions }: AiResponseMapProp
               ))}
             </>
           )}
-          {(showEonet || showGdacs || showUsgs || showRadar || showFacilities) && <div className="my-1.5 border-t border-slate-800" />}
+          <div className="my-1.5 border-t border-slate-800" />
           <div className="flex items-center gap-1.5">
             <span
               className="inline-block h-3 w-3 shrink-0 rounded-full border-2 border-white"

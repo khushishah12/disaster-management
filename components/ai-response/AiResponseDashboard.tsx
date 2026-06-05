@@ -58,7 +58,18 @@ type DisplayEvent = {
   source: "EONET" | "USGS" | "GDACS";
 };
 
+type IntelTab = "overview" | "resources" | "dispatch" | "weather" | "intel";
+
+const TABS: { id: IntelTab; label: string }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "resources", label: "Resource Allocation" },
+  { id: "dispatch", label: "Dispatch" },
+  { id: "weather", label: "Weather & Route" },
+  { id: "intel", label: "AI Intel" },
+];
+
 export function AiResponseDashboard() {
+  const [activeTab, setActiveTab] = useState<IntelTab>("overview");
   const [dispatchView, setDispatchView] = useState<"live" | "simulation">("live");
 
   const latitude = useDisasterStore((s) => s.situation.latitude);
@@ -270,68 +281,129 @@ export function AiResponseDashboard() {
         </div>
       </header>
 
+      {/* Tab bar */}
+      <div className="flex gap-1 border-b border-slate-800/60 px-4 pt-2 sm:px-6 lg:px-8">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={cn(
+              "rounded-t-lg px-3 py-2 text-xs font-semibold uppercase tracking-wider transition-all",
+              activeTab === tab.id
+                ? "bg-slate-800/80 text-teal-400 border border-b-0 border-slate-700/50"
+                : "text-slate-500 hover:text-slate-300 hover:bg-slate-800/30",
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       <div className="flex flex-1 flex-col gap-4 overflow-auto p-4 lg:flex-row lg:p-6">
+        {/* Left panels - change by tab */}
         <aside className="flex flex-col gap-4 lg:w-[30%]">
-          <DisasterSituationAnalysis />
-
-          <PanelCard title="Live Events">
-            {allLoading ? (
-              <div className="space-y-2">
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-3/4" />
-              </div>
-            ) : displayEvents.length === 0 ? (
-              <p className="text-sm text-slate-500">No active events in the India region.</p>
-            ) : (
-              <div className="space-y-1.5 max-h-[320px] overflow-y-auto pr-1">
-                {displayEvents.map((ev) => (
-                  <div key={ev.id} className="rounded-lg border border-slate-800/60 bg-slate-900/40 p-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-slate-200">{ev.type}</span>
-                      <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide", SOURCE_COLORS[ev.source])}>
-                        {ev.source}
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-xs text-slate-400 line-clamp-1">{ev.label}</p>
-                    <p className="mt-0.5 text-[10px] text-slate-500">{ev.detail}</p>
+          {activeTab === "overview" && (
+            <>
+              <DisasterSituationAnalysis />
+              <PanelCard title="Live Events">
+                {allLoading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-3/4" />
                   </div>
-                ))}
-              </div>
-            )}
-          </PanelCard>
+                ) : displayEvents.length === 0 ? (
+                  <p className="text-sm text-slate-500">No active events in the India region.</p>
+                ) : (
+                  <div className="space-y-1.5 max-h-[320px] overflow-y-auto pr-1">
+                    {displayEvents.map((ev) => (
+                      <div key={ev.id} className="rounded-lg border border-slate-800/60 bg-slate-900/40 p-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-slate-200">{ev.type}</span>
+                          <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide", SOURCE_COLORS[ev.source])}>
+                            {ev.source}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-xs text-slate-400 line-clamp-1">{ev.label}</p>
+                        <p className="mt-0.5 text-[10px] text-slate-500">{ev.detail}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </PanelCard>
+            </>
+          )}
 
-          <PanelCard title="SOS Resource Allocation">
-            <ResourceAllocationCards />
-          </PanelCard>
+          {activeTab === "resources" && (
+            <>
+              <PanelCard title="Resource Allocation">
+                <ResourceAllocationPanel inputs={{ disasterType, severity, populationAffected, weatherScore }} />
+              </PanelCard>
+              <PanelCard title="SOS Resource Cards">
+                <ResourceAllocationCards />
+              </PanelCard>
+            </>
+          )}
 
-          <PanelCard title="AI Intelligence">
-            <AIIntelligencePanel />
-          </PanelCard>
+          {activeTab === "dispatch" && (
+            <>
+              <PanelCard title="Dispatch">
+                <div className="mb-3 flex gap-1 rounded-lg bg-slate-800/60 p-0.5">
+                  <button
+                    onClick={() => setDispatchView("live")}
+                    className={`flex-1 rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider transition ${dispatchView === "live" ? "bg-teal-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+                  >
+                    Live
+                  </button>
+                  <button
+                    onClick={() => setDispatchView("simulation")}
+                    className={`flex-1 rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider transition ${dispatchView === "simulation" ? "bg-teal-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+                  >
+                    Simulate
+                  </button>
+                </div>
+                {dispatchView === "live" ? (
+                  <LiveDispatchPanel />
+                ) : (
+                  <DispatchPanel onMissionsChange={setDispatchMissions} />
+                )}
+              </PanelCard>
+              <PanelCard title="Emergency Facilities">
+                <FacilitiesPanel hasLocation={hasFacilityLocation} />
+              </PanelCard>
+            </>
+          )}
 
-          <PanelCard title="Dispatch">
-            <div className="mb-3 flex gap-1 rounded-lg bg-slate-800/60 p-0.5">
-              <button
-                onClick={() => setDispatchView("live")}
-                className={`flex-1 rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider transition ${dispatchView === "live" ? "bg-teal-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
-              >
-                Live
-              </button>
-              <button
-                onClick={() => setDispatchView("simulation")}
-                className={`flex-1 rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider transition ${dispatchView === "simulation" ? "bg-teal-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
-              >
-                Simulate
-              </button>
-            </div>
-            {dispatchView === "live" ? (
-              <LiveDispatchPanel />
-            ) : (
-              <DispatchPanel onMissionsChange={setDispatchMissions} />
-            )}
-          </PanelCard>
+          {activeTab === "weather" && (
+            <>
+              <PanelCard title="Weather">
+                <WeatherPanel />
+              </PanelCard>
+              <PanelCard title="Route Planner">
+                <RoutePlannerPanel
+                  incidents={routeIncidents}
+                  routeData={routeData}
+                  onRouteClear={clearRoute}
+                  loading={routeLoading}
+                  onPlanRoute={(from, to) => setRouteParams({ fromLat: from.lat, fromLng: from.lng, toLat: to.lat, toLng: to.lng })}
+                />
+              </PanelCard>
+            </>
+          )}
+
+          {activeTab === "intel" && (
+            <>
+              <PanelCard title="AI Intelligence">
+                <AIIntelligencePanel />
+              </PanelCard>
+              <PanelCard title="Recommendations">
+                <RecommendationPanel recommendations={recommendations} loading={allLoading} />
+              </PanelCard>
+            </>
+          )}
         </aside>
 
+        {/* Map - always visible */}
         <section className="flex flex-col lg:w-[50%]">
           <div className="dashboard-panel relative flex-1 overflow-hidden rounded-xl border border-slate-800/60" style={{ minHeight: "300px" }}>
             <AiResponseMap
@@ -341,28 +413,71 @@ export function AiResponseDashboard() {
           </div>
         </section>
 
+        {/* Right panels - change by tab */}
         <aside className="flex flex-col gap-4 lg:w-[20%]">
-          <PanelCard title="Weather">
-            <WeatherPanel />
-          </PanelCard>
+          {activeTab === "overview" && (
+            <>
+              <PanelCard title="Weather Summary">
+                <WeatherPanel />
+              </PanelCard>
+              <PanelCard title="Route Planner">
+                <RoutePlannerPanel
+                  incidents={routeIncidents}
+                  routeData={routeData}
+                  onRouteClear={clearRoute}
+                  loading={routeLoading}
+                  onPlanRoute={(from, to) => setRouteParams({ fromLat: from.lat, fromLng: from.lng, toLat: to.lat, toLng: to.lng })}
+                />
+              </PanelCard>
+              <PanelCard title="Recommendations">
+                <RecommendationPanel recommendations={recommendations} loading={allLoading} />
+              </PanelCard>
+            </>
+          )}
 
-          <PanelCard title="Emergency Facilities">
-            <FacilitiesPanel hasLocation={hasFacilityLocation} />
-          </PanelCard>
+          {activeTab === "resources" && (
+            <>
+              <PanelCard title="Emergency Facilities">
+                <FacilitiesPanel hasLocation={hasFacilityLocation} />
+              </PanelCard>
+              <PanelCard title="AI Intelligence">
+                <AIIntelligencePanel />
+              </PanelCard>
+            </>
+          )}
 
-          <PanelCard title="Route Planner">
-            <RoutePlannerPanel
-              incidents={routeIncidents}
-              routeData={routeData}
-              onRouteClear={clearRoute}
-              loading={routeLoading}
-              onPlanRoute={(from, to) => setRouteParams({ fromLat: from.lat, fromLng: from.lng, toLat: to.lat, toLng: to.lng })}
-            />
-          </PanelCard>
+          {activeTab === "dispatch" && (
+            <>
+              <PanelCard title="Weather">
+                <WeatherPanel />
+              </PanelCard>
+              <PanelCard title="Recommendations">
+                <RecommendationPanel recommendations={recommendations} loading={allLoading} />
+              </PanelCard>
+            </>
+          )}
 
-          <PanelCard title="Recommendations">
-            <RecommendationPanel recommendations={recommendations} loading={allLoading} />
-          </PanelCard>
+          {activeTab === "weather" && (
+            <>
+              <PanelCard title="Emergency Facilities">
+                <FacilitiesPanel hasLocation={hasFacilityLocation} />
+              </PanelCard>
+              <PanelCard title="Recommendations">
+                <RecommendationPanel recommendations={recommendations} loading={allLoading} />
+              </PanelCard>
+            </>
+          )}
+
+          {activeTab === "intel" && (
+            <>
+              <PanelCard title="Resource Allocation">
+                <ResourceAllocationPanel inputs={{ disasterType, severity, populationAffected, weatherScore }} />
+              </PanelCard>
+              <PanelCard title="SOS Resource Cards">
+                <ResourceAllocationCards />
+              </PanelCard>
+            </>
+          )}
         </aside>
       </div>
     </div>
