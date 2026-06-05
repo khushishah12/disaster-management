@@ -51,6 +51,14 @@ const RescueOpsPanel = dynamic(
   () => import("@/components/rescue/RescueOpsPanel").then((m) => m.RescueOpsPanel),
   { ssr: false },
 );
+const ShelterOpsPanel = dynamic(
+  () => import("@/components/shelter/ShelterOpsPanel").then((m) => m.ShelterOpsPanel),
+  { ssr: false },
+);
+const AddShelterPanel = dynamic(
+  () => import("@/components/shelter/AddShelterPanel").then((m) => m.AddShelterPanel),
+  { ssr: false },
+);
 
 type SidebarLayoutProps = {
   children: React.ReactNode;
@@ -79,6 +87,8 @@ const TAB_CONTENT: Record<TabId, { label: string }> = {
   "ambulance-ops": { label: "Ambulance Operations" },
   "fire-ops": { label: "Fire Response Ops" },
   "rescue-ops": { label: "Rescue Ops" },
+  "shelter-ops": { label: "Human Accommodation Tracking" },
+  "add-shelter": { label: "Add Shelter" },
   "sos-response": { label: "SOS Response Management" },
   "sos-assignments": { label: "SOS Assignments" },
   sos: { label: "SOS Emergency" },
@@ -156,6 +166,12 @@ export const SidebarLayout = ({
     }
     if (activeTab === "rescue-ops") {
       return <RescueOpsPanel />;
+    }
+    if (activeTab === "shelter-ops") {
+      return <ShelterOpsPanel />;
+    }
+    if (activeTab === "add-shelter") {
+      return <AddShelterPanel />;
     }
     if (activeTab === "sos-response") {
       return <SosResponsePanel />;
